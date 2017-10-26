@@ -223,8 +223,7 @@ fn clamp(n: f32, min: f32, max: f32) -> f32 {
     }
 }
 
-/// Often times we want to determine how close to objects are, or what pair of
-/// points on their surfaces are closest.
+/// Finds the result corresponding to the minimum distance between two objects.
 pub trait MinDistance<To = Point3<f32>, Result = Point3<f32>> {
     fn min_dist(&self, &To) -> Result;
 }
@@ -425,15 +424,8 @@ impl MinDistance<Point3<f32>> for Capsule {
     }
 }
 
-/// Set of points in space.
-/// A common goal in collision detection is to determine the minimum distance
-/// between two objects.
-/// With this in mind we can determine one important thing from any shape: the
-/// point contained within the set closest to any given point.
-/// Additionally, shapes have some extra properties in that they can be moved
-/// around and decompose into a single point (their center).
-/// It's not always incredibly efficient to move or take the center point of a
-/// shape but it's certainly possible.
+/// A Set of points in space. If an object can be moved around and has
+/// point something that can be called a center, it is a Shape.
 pub trait Shape
     : AddAssign<Vector3<f32>>
     + SubAssign<Vector3<f32>>
@@ -702,8 +694,8 @@ impl Polygon for Rectangle {
     fn face(&self) -> &Rectangle { self }
 }
             
-/// Determine if objects collide and collect information on the collision if they
-/// do. The type of the collision and the amount of information on the collision
+/// Determine if two objects collide and collect information on the collision if they
+/// do. The type of the collision checked for and the amount of information
 /// returned depends on the CollisionType argument requested by the callback passed
 /// to collide.
 pub trait Collider<CollisionType: Clone, T = Self> {
@@ -716,7 +708,6 @@ pub trait Collider<CollisionType: Clone, T = Self> {
         }
         false
     }
-
     /// Returns the first collision found if any exists.
     fn check_collision(&self, other: &T) -> Option<CollisionType> {
         let mut collision = None;
@@ -1088,10 +1079,9 @@ commute_intersection!(Sphere, Ray);
 commute_intersection!(Capsule, Ray);
 commute_intersection!(Moving<Sphere>, Ray);
 
-/// Contact models a collision that occurs at some time 0 <= t <= 1.0 for
-/// geometries that have a three dimensional surface.
-/// Contacts of these types share a convention where the collision normal
-/// provided is from the surface of the object implementing the the trait (object A).
+/// A contact is a collision between two objects where at least one object and
+/// has volume. A contact collision produces two contact points, a normal, and 
+/// a time of impact in the interval [0, 1]. 
 #[derive(Copy, Clone, Debug)]
 pub struct Contact {
     pub a: Point3<f32>,  // Contact point for collider in global coordinates

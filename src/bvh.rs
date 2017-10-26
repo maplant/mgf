@@ -117,7 +117,7 @@ impl<B: Bound, V> BVH<B, V> {
     }
 
     /// Inserts an item ino the BVH, rebalancing if necessary. All IDs returned
-    /// prior to insert remain valid after every insertion.
+    /// prior to insert remain valid afterward.
     pub fn insert<K: BoundedBy<B>>(&mut self, key: &K, val: V) -> usize {
         self.num_leaves += 1;
         let bounds = key.bounds();
@@ -213,7 +213,7 @@ impl<B: Bound, V> BVH<B, V> {
         leaf
     }
 
-    /// Removes a leaf node from the BVH tree.
+    /// Removes a leaf node from the BVH.
     pub fn remove(&mut self, leaf: usize) {
         self.num_leaves -= 1;
         let parent = self.pool[leaf].parent;
@@ -253,6 +253,7 @@ impl<B: Bound, V> BVH<B, V> {
         }
     }
 
+    /// Returns the index of the root node.
     pub fn root(&self) -> usize {
         self.root
     }

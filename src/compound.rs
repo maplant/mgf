@@ -150,38 +150,6 @@ impl Collider<Contact, Moving<Component>> for Rectangle {
     }
 }
 
-/*
-impl<T> Collider<Contact, T> for Component
-where
-    T: Collider<Contact, Sphere> + Collider<Contact, Capsule>
-{
-    fn collide<F: FnMut(Contact)>(&self, rhs: &T, mut callback: F) -> bool {
-        match self {
-            &Component::Sphere(ref s) => rhs.collide(s, |c| callback(-c)),
-            &Component::Capsule(ref c) => rhs.collide(c, |c| callback(-c)),
-        }
-    }
-}
- */   
-
-/*
-impl<T> Collider<Contact, Moving<T>> for Component
-where
-    T: Collider<Contact, Moving<Sphere>> + Collider<Contact, Moving<Capsule>> + Shape + Copy
-{
-    fn collide<F: FnMut(Contact)>(&self, rhs: &Moving<T>, mut callback: F) -> bool {
-        match self {
-            &Component::Sphere(s) => {
-                rhs.as_ref().collide(&Moving::sweep(s, -rhs.1), |c: Contact| callback(-c))
-            },
-            &Component::Capsule(c) => {
-                rhs.as_ref().collide(&Moving::sweep(c, -rhs.1), |c: Contact| callback(-c))
-            },
-        }
-    }
-}
-*/
-
 impl<T> Collider<Contact, T> for Moving<Component>
 where
     T: Collider<Contact, Moving<Sphere>> + Collider<Contact, Moving<Capsule>> 
@@ -212,6 +180,7 @@ impl Collider<Contact, Component> for Moving<Capsule> {
     }
 }
 
+/// An aggregate structure of Spheres and Capsules. Has a position and rotation.
 #[derive(Clone)]
 pub struct Compound {
     pub disp: Vector3<f32>,

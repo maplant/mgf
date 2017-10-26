@@ -19,6 +19,7 @@ use std::iter::FilterMap;
 use std::ops::{Index, IndexMut};
 use std::vec::Vec;
 
+/// Internal storage type used by Pool.
 pub enum PoolEntry<T> {
     FreeListEnd,
     FreeListPtr {
@@ -27,6 +28,8 @@ pub enum PoolEntry<T> {
     Occupied(T)
 }
 
+/// Growable array type that allows items to be removed and inserted without
+/// changing the indices of other entries.
 pub struct Pool<T> {
     len: usize,
     free_list: Option<usize>,
@@ -34,6 +37,7 @@ pub struct Pool<T> {
 }
 
 impl<T> Pool<T> {
+    /// Create an empty Pool.
     pub fn new() -> Self {
         Pool {
             len: 0,
@@ -42,6 +46,7 @@ impl<T> Pool<T> {
         }
     }
 
+    /// Create an empty Pool large enough to fix cap items.
     pub fn with_capacity(cap: usize) -> Self {
         Pool {
             len: 0,
@@ -50,6 +55,7 @@ impl<T> Pool<T> {
         }
     }
 
+    /// Determines if the Pool is empty.
     pub fn empty(&self) -> bool {
         self.len == 0
     }
@@ -58,6 +64,8 @@ impl<T> Pool<T> {
         self.len
     }
 
+    /// Push a new item to the Pool. Attempts to use spots left empty from
+    /// removed items before performing a heap allocation.
     pub fn push(&mut self, item: T) -> usize {
         self.len += 1;
         if let Some(free_item) = self.free_list {
@@ -75,6 +83,8 @@ impl<T> Pool<T> {
         }
     }
 
+    /// Marks an index as empty and adds it to the free list, allowing the
+    /// spot to be reclaimed later.
     pub fn remove(&mut self, i: usize) -> T {
         let new_entry = if let Some(free_item) = self.free_list {
                 PoolEntry::FreeListPtr{ next_free: free_item } 

@@ -93,6 +93,7 @@ pub struct RigidBody {
 }
 
 impl RigidBody {
+    /// Construct a new RigidBody from a Vec of Components and masses.
     pub fn new(
         restitution: f32,
         friction: f32,
@@ -220,6 +221,7 @@ pub struct StaticBody<'a, S: Shape + 'a> {
 }
 
 impl<'a, S: Shape + 'a> StaticBody<'a, S> {
+    /// Construct a new StaticBody from a Shape.
     pub fn new(friction: f32, shape: &'a S) -> Self {
         StaticBody {
             friction,
@@ -277,7 +279,6 @@ where
 
 /// My entire understanding of the natural world as applied to video games
 /// encapsulated in one structure.
-/// PhysicsState is always defined for the end of the current timestep.
 #[derive(Copy, Clone)]
 pub struct PhysicsState {
     /// Restitution is a measure of how much kinetic energy is retained in a
@@ -302,6 +303,7 @@ pub struct PhysicsState {
     pub omega: Vector3<f32>,
 }
 
+/// An object that exhibits physical properties. 
 pub trait PhysicsObject {
     /// Integrate the object over the timestep
     fn integrate(&mut self, dt: f32);
@@ -382,11 +384,13 @@ impl<'a, S: Shape + 'a> PhysicsObject for StaticBody<'a, S> {
     }
 }
 
+/// A set of constants necessary when performing collision resolution.
 pub trait PhysicsConfig {
     const PENETRATION_SLOP: f32;
     const BAUMGARTE: f32; 
 }
 
+/// The suggested set of parameters to use when resolving collisions.
 pub struct DefaultPhysConfig {}
 
 impl PhysicsConfig for DefaultPhysConfig {
