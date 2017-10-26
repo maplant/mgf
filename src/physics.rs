@@ -19,11 +19,12 @@ use cgmath::{EuclideanSpace, InnerSpace, SquareMatrix, Rotation,
              Matrix, Matrix3, Point3, Quaternion, Vector3, One, Zero};
 
 use bounds::*;
+use compound::*;
+use collision::*;
 use geom::*;
 use manifold::*;
-use compound::*;
 
-/// An object that has a moment of inertia.
+/// An type that has a moment of inertia.
 pub trait Inertia {
     fn tensor(&self, m: f32) -> Matrix3<f32>;
 }
@@ -71,8 +72,11 @@ impl Inertia for Component {
     }
 }
 
-/// Generic physical body that has a mass, a volume, and experiences linear and
+/// A eneric physical body that has a mass, a volume, and experiences linear and
 /// rotational movement.
+///
+/// A RigidBody is technically a shape, although its geomtries are all considered
+/// to be in motion.
 #[derive(Clone)]
 pub struct RigidBody {
     pub restitution: f32,
@@ -188,11 +192,11 @@ impl BoundedBy<Sphere> for RigidBody {
     }
 }
 
-impl<T> Collider<Contact, T> for RigidBody
+impl<RHS> Contacts<RHS> for RigidBody
 where
-    T: Collider<Contact, Moving<Component>> + BoundedBy<AABB>
+    RHS: Contacts<Moving<Component>> + BoundedBy<AABB>
 {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &T, mut callback: F) -> bool {
+    fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, mut callback: F) -> bool {
         let conj_rot = self.collider.rot.conjugate();
         let mut rhs_bounds = rhs.bounds().rotate(conj_rot);
         let rhs_center = rhs_bounds.center();
@@ -200,19 +204,22 @@ where
         rhs_bounds.set_pos(bounds_disp);
         let rhs_bounds: AABB = Moving::sweep(rhs_bounds, -self.v_step).bounds();
         let mut collided = false;
-        self.collider.bvh.collide(&rhs_bounds, |comp_i| {
+        self.collider.bvh.query(&rhs_bounds, |&comp_i| {
             let shape = Moving::sweep(
                 self.collider.shapes[comp_i].rotate(self.collider.rot) + self.collider.disp,
                 self.v_step
             );
-            rhs.collide(&shape, |c| { collided = true; callback(-c) });
+            rhs.contacts(&shape, |c| { collided = true; callback(-c) });
         });
         collided
     }
 }
 
-/// A physical object that cannot move. Can be constructed from any shape.
-/// Only parameter required is a value for friction.
+/// A physical object that cannot move.
+///
+/// A static body is an immovable object that can be constructed from any
+/// shape, the only other parameter required is a value for friction.
+/// 
 /// A StaticBody is not a Shape and cannot be moved. StaticBodies contain
 /// a reference to the Shape they mimic and thus should not live very long.
 pub struct StaticBody<'a, S: Shape + 'a> {
@@ -240,31 +247,31 @@ where
     }
 }
 
-impl<'a, S, T> Collider<Intersection, T> for StaticBody<'a, S>
+impl<'a, S, RHS> Intersects<RHS> for StaticBody<'a, S>
 where
-    S: Shape + Collider<Intersection, T>
+    S: Intersects<RHS> + Shape
 {
-    fn collide<F: FnMut(Intersection)>(&self, rhs: &T, callback: F) -> bool {
-        self.shape.collide(rhs, callback)
+    fn intersection(&self, rhs: &RHS) -> Option<Intersection> {
+        self.shape.intersection(rhs)
     }
 }
 
-impl<'a, S, T> Collider<Contact, T> for StaticBody<'a, S>
+impl<'a, S, RHS> Contacts<RHS> for StaticBody<'a, S>
 where
-    S: Shape + Collider<Contact, T>
+    S: Contacts<RHS> + Shape
 {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &T, callback: F) -> bool {
-        self.shape.collide(rhs, callback)
+    fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, callback: F) -> bool {
+        self.shape.contacts(rhs, callback)
     }
 }
 
-impl<'a, S, T> Collider<LocalContact, StaticBody<'a, S>> for T // StaticBody<'a, S>
+impl<'a, S, Recv> LocalContacts<StaticBody<'a, S>> for Recv
 where
     S: Shape,
-    T: Shape + Delta + Collider<Contact, S>,
+    Recv: Contacts<S> + Shape + Delta
 {
-    fn collide<F: FnMut(LocalContact)>(&self, rhs: &StaticBody<'a, S>, mut callback: F) -> bool {
-        self.collide(rhs.shape, |c: Contact| {
+    fn local_contacts<F: FnMut(LocalContact)>(&self, rhs: &StaticBody<'a, S>, mut callback: F) -> bool {
+        self.contacts(rhs.shape, |c| {
             let a_c = self.center() + self.delta() * c.t;
             let b_c = rhs.shape.center();
             callback(LocalContact {
@@ -276,9 +283,7 @@ where
     }
 }
 
-
-/// My entire understanding of the natural world as applied to video games
-/// encapsulated in one structure.
+/// A description of the physical state of an object.
 #[derive(Copy, Clone)]
 pub struct PhysicsState {
     /// Restitution is a measure of how much kinetic energy is retained in a
@@ -303,7 +308,12 @@ pub struct PhysicsState {
     pub omega: Vector3<f32>,
 }
 
-/// An object that exhibits physical properties. 
+/// A type that exhibits physical properties.
+///
+/// A PhysicsObject's primary function is to return a PhysicsState to be used
+/// during collision resolution. Beyond that it has various methods to be updated
+/// or choose to ignore such updates (for example, calling `apply_impulse` on a
+/// StaticBody is a no-op).
 pub trait PhysicsObject {
     /// Integrate the object over the timestep
     fn integrate(&mut self, dt: f32);
@@ -521,7 +531,7 @@ mod tests {
             body2.integrate(1.0);
 
             let mut manifold = Manifold::new();
-            assert!(body1.collide(&body2, |c: LocalContact| {
+            assert!(body1.local_contacts(&body2, |c| {
                 manifold.push(c);
             }));
             
@@ -543,7 +553,7 @@ mod tests {
             body2.integrate(1.0);
 
             let mut manifold = Manifold::new();
-            assert!(body1.collide(&body2, |c: LocalContact| {
+            assert!(body1.local_contacts(&body2, |c| {
                 manifold.push(c);
             }));
             
@@ -565,7 +575,7 @@ mod tests {
             body2.integrate(1.0);
 
             let mut manifold = Manifold::new();
-            assert!(body1.collide(&body2, |c: LocalContact| {
+            assert!(body1.local_contacts(&body2, |c| {
                 manifold.push(c);
             }));
 
@@ -595,7 +605,7 @@ mod tests {
             body2.integrate(1.0);
 
             let mut manifold = Manifold::new();
-            assert!(body1.collide(&body2, |c: LocalContact| {
+            assert!(body1.local_contacts(&body2, |c| {
                 manifold.push(c);
             }));
 
@@ -620,7 +630,7 @@ mod tests {
             body2.integrate(1.0);
 
             let mut manifold = Manifold::new();
-            assert!(body1.collide(&body2, |c: LocalContact| {
+            assert!(body1.local_contacts(&body2, |c| {
                 manifold.push(c);
             }));
 
@@ -673,7 +683,7 @@ mod tests {
             body2.integrate(1.0);
 
             let mut manifold = Manifold::new();
-            assert!(body1.collide(&body2, |c: LocalContact| {
+            assert!(body1.local_contacts(&body2, |c: LocalContact| {
                 manifold.push(c);
             }));
 
@@ -702,7 +712,7 @@ mod tests {
             assert_eq!(body1.v, Vector3::new(0.0, -4.0, 0.0));
  
             let mut manifold = Manifold::new();
-            assert!(body1.collide(&body2, |c: LocalContact| {
+            assert!(body1.local_contacts(&body2, |c: LocalContact| {
                 manifold.push(c);
             }));
 

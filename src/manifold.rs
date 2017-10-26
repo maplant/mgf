@@ -17,6 +17,7 @@ use std::f32;
 use cgmath::{EuclideanSpace, InnerSpace};
 
 use smallvec::SmallVec;
+use collision::*;
 use geom::*;
 
 /// Minimum distance between two points required to not reject a point.

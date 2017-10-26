@@ -18,6 +18,7 @@ use std::vec::Vec;
 
 use bvh::*;
 use geom::*;
+use collision::*;
 use bounds::{BoundedBy};
 use cgmath::{EuclideanSpace, Vector3, Point3, Zero};
 
@@ -91,19 +92,20 @@ impl Shape for Mesh {
     }
 }
 
-impl<T> Collider<Contact, T> for Mesh
+impl<RHS> Contacts<RHS> for Mesh
 where
-    T: Collider<Contact, Triangle> + Collider<Contact, Rect> + BoundedBy<AABB>
+    RHS: Contacts<Triangle> + Contacts<Rectangle> + BoundedBy<AABB>
 {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &T, mut callback: F) -> bool {
-        self.bvh
-            .collide(&(rhs.bounds() - self.disp), |face_i| {
-                let (a, b, c) = self.faces[face_i];
-                let a = self.verts[a].p + self.disp;
-                let b = self.verts[b].p + self.disp;
-                let c = self.verts[c].p + self.disp;
-                let tri = Triangle::from((a, b, c));
-                rhs.collide(&tri, |c| callback(-c));
-            })
+    fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, mut callback: F) -> bool {
+        let mut collided = false;
+        self.bvh.query(&(rhs.bounds() - self.disp), |&face_index| {
+            let (a, b, c) = self.faces[face_index];
+            let a = self.verts[a].p + self.disp;
+            let b = self.verts[b].p + self.disp;
+            let c = self.verts[c].p + self.disp;
+            let tri = Triangle::from((a, b, c));
+            rhs.contacts(&tri, |c| { collided = true; callback(-c) });
+        });
+        collided
     }
 }

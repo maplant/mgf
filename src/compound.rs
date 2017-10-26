@@ -19,6 +19,7 @@ use cgmath::{EuclideanSpace, Rotation, Vector3, Point3, Quaternion, One, Zero};
 
 use bvh::*;
 use bounds::*;
+use collision::*;
 use geom::*;
 
 /// A component is a generic volume that can either be a Sphere or Capsule at
@@ -119,74 +120,52 @@ impl BoundedBy<Sphere> for Component {
         }
     }
 }
-/*
+
 macro_rules! impl_component_collision {
     (
         $recv:ty
     ) => {
-        impl Collider<Contact, Component> for Moving<$recv> {
-            fn collide<F: FnMut(Contact)>(&self, rhs: &Component, callback: F) -> bool {
-                match rhs {
-                    &Component::Sphere(ref s) => self.collide(s, callback),
-                    &Component::Capsule(ref c) => self.collide(c, callback),
+        impl Contacts<Moving<Component>> for $recv {
+            fn contacts<F: FnMut(Contact)>(&self, rhs: &Moving<Component>, callback: F) -> bool {
+                match rhs.0 {
+                    Component::Sphere(s) => self.contacts(&Moving::sweep(s, rhs.1), callback),
+                    Component::Capsule(c) => self.contacts(&Moving::sweep(c, rhs.1), callback),
                 }
             }
         }
     };
 }
 
-impl_component_collision!(Plane);
-impl_component_collision!(Triangle);
-impl_component_collision!(Rectangle);
-impl_component_collision!(Sphere);
-impl_component_collision!(Capsule);
-*/
-impl Collider<Contact, Moving<Component>> for Rectangle {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &Moving<Component>, callback: F) -> bool {
-        match rhs.0 {
-            Component::Sphere(s) => self.collide(&Moving::sweep(s, rhs.1), callback),
-            Component::Capsule(c) => self.collide(&Moving::sweep(c, rhs.1), callback),
-        }
-    }
-}
+impl_component_collision!{ Plane }
+impl_component_collision!{ Triangle }
+impl_component_collision!{ Rectangle }
+impl_component_collision!{ Sphere }
+impl_component_collision!{ Capsule }
 
-impl<T> Collider<Contact, T> for Moving<Component>
+impl<RHS> Contacts<RHS> for Moving<Component>
 where
-    T: Collider<Contact, Moving<Sphere>> + Collider<Contact, Moving<Capsule>> 
+    RHS: Contacts<Moving<Sphere>> + Contacts<Moving<Capsule>>
 {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &T, mut callback: F) -> bool {
+    fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, mut callback: F) -> bool {
         match self.0 {
-            Component::Sphere(s) => rhs.collide(&Moving::sweep(s, self.1), |c|callback(-c)),
-            Component::Capsule(c) => rhs.collide(&Moving::sweep(c, self.1), |c|callback(-c)),
+            Component::Sphere(s) => rhs.contacts(&Moving::sweep(s, self.1), |c|callback(-c)),
+            Component::Capsule(c) => rhs.contacts(&Moving::sweep(c, self.1), |c|callback(-c)),
         }
     }
 }
 
-impl Collider<Contact, Component> for Moving<Sphere> {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &Component, callback: F) -> bool {
-        match rhs {
-            &Component::Sphere(ref s) => self.collide(s, callback),
-            &Component::Capsule(ref c) => self.collide(c, callback),
-        }
-    }
-}
-
-impl Collider<Contact, Component> for Moving<Capsule> {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &Component, callback: F) -> bool {
-        match rhs {
-            &Component::Sphere(ref s) => self.collide(s, callback),
-            &Component::Capsule(ref c) => self.collide(c, callback),
-        }
-    }
-}
 
 /// An aggregate structure of Spheres and Capsules. Has a position and rotation.
 #[derive(Clone)]
 pub struct Compound {
+    /// The displacement of the object.
     pub disp: Vector3<f32>,
-    /// Rotation, assumed to be normalized.
+    /// The rotation of the object. Assumed to be normalized.
     pub rot: Quaternion<f32>,
+    /// The geometries the compound is composed of.
     pub shapes: Vec<Component>,
+    /// BVH storing the bounds of the components to improve collision
+    /// efficiency.
     pub bvh: BVH<AABB, usize>,
 }
 
@@ -240,11 +219,11 @@ impl Shape for Compound {
     }
 }
 
-impl<T> Collider<Contact, T> for Compound
+impl<RHS> Contacts<RHS> for Compound
 where
-    T: Collider<Contact, Component> + BoundedBy<AABB>
+    RHS: Contacts<Component> + BoundedBy<AABB>
 {
-    fn collide<F: FnMut(Contact)>(&self, rhs: &T, mut callback: F) -> bool {
+    fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, mut callback: F) -> bool {
         // We assume that self.rot is normalized.
         let conj_rot = self.rot.conjugate();
         let mut rhs_bounds = rhs.bounds().rotate(conj_rot);
@@ -252,9 +231,9 @@ where
         let bounds_disp = conj_rot.rotate_point(rhs_center + -self.disp) + self.disp;
         rhs_bounds.set_pos(bounds_disp);
         let mut collided = false;
-        self.bvh.collide(&rhs_bounds, |comp_i| {
+        self.bvh.query(&rhs_bounds, |&comp_i| {
             let shape = self.shapes[comp_i].rotate(self.rot) + self.disp;
-            rhs.collide(&shape, |c| { collided = true; callback(-c) });
+            rhs.contacts(&shape, |c| { collided = true; callback(-c) });
         });
         collided
     }
@@ -265,6 +244,7 @@ mod tests {
     mod compound {
         use cgmath::InnerSpace;
         use compound::*;
+        use collision::Contacts;
 
         #[test]
         fn test_compound() {
@@ -275,12 +255,12 @@ mod tests {
             let mut compound = Compound::new(components);
             let test_sphere = Moving::sweep(Sphere{ c: Point3::new(0.0, 8.0, 0.0), r: 1.0 },
                                             Vector3::new(0.0, -1.5, 0.0));
-            assert!(!compound.collide(&test_sphere, |c: Contact| { panic!("c = {:?}", c); }));
+            assert!(!compound.contacts(&test_sphere, |c: Contact| { panic!("c = {:?}", c); }));
             // rotate compounds
             compound.rot = Quaternion::from_arc(Vector3::new(1.0, 0.0, 0.0),
                                                 Vector3::new(0.0, 1.0, 0.0),
                                                 None).normalize();
-            let contact: Contact = compound.check_collision(&test_sphere).unwrap();
+            let contact: Contact = compound.last_contact(&test_sphere).unwrap();
             assert_relative_eq!(contact.t, 0.6666663, epsilon = COLLISION_EPSILON);
             assert_relative_eq!(contact.a, Point3::new(0.0, 6.0, 0.0), epsilon = COLLISION_EPSILON);
 
@@ -290,7 +270,7 @@ mod tests {
                 e: [ 6.0, 6.0 ],
             };
 
-            let _contact: Contact = static_rect.check_collision(&Moving::sweep(compound.shapes[0], Vector3::new(0.0, -3.0, 0.0))).unwrap();
+            let _contact: Contact = static_rect.last_contact(&Moving::sweep(compound.shapes[0], Vector3::new(0.0, -3.0, 0.0))).unwrap();
         }
     }
 }

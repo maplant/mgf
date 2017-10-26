@@ -19,9 +19,7 @@ use std::ops::Index;
 use smallvec::SmallVec;
 
 use bounds::{Bound, BoundedBy};
-use geom::{Collider, Overlaps};
 use pool::Pool;
-
 
 /// A Bounding Volume Hierarchy.
 pub struct BVH<B: Bound, V> {
@@ -82,6 +80,7 @@ impl<V: Clone> Clone for BVHNodeType<V> {
 }
 
 impl<B: Bound, V> BVH<B, V> {
+    /// Creates an empty BVH.
     pub fn new() -> Self {
         BVH {
             root: 0,
@@ -90,6 +89,7 @@ impl<B: Bound, V> BVH<B, V> {
         }
     }
 
+    /// Creates a BVH with a preallocated array of cap.
     pub fn with_capacity(cap: usize) -> Self {
         BVH {
             root: 0,
@@ -98,6 +98,7 @@ impl<B: Bound, V> BVH<B, V> {
         }
     }
 
+    /// Determines if the BVH is empty.
     pub fn empty(&self) -> bool {
         self.pool.empty()
     }
@@ -258,6 +259,75 @@ impl<B: Bound, V> BVH<B, V> {
         self.root
     }
 
+    /// Find each entry in the BVH that has a bound that Overlaps the bound of
+    /// the passed object.
+    pub fn query<Arg, F>(&self, arg: &Arg, mut callback: F)
+    where
+        Arg: BoundedBy<B>,
+        F: FnMut(&V)
+    {
+        let len = self.len();
+        if len < 1 {
+            return;
+        }
+        let arg_bounds = arg.bounds();
+        // 64 entries should be enough, since 2^64 - 1 is the maximum number of
+        // items a Vec can store.
+        let mut stack = SmallVec::<[usize; 64]>::new();
+        // TODO: use the system stack first, then allocate.
+        // let cap = len + ((len as f32).log(2.0) as usize);
+        // let mut stack = Vec::with_capacity(cap);
+        stack.push(self.root);
+        while let Some(top) = stack.pop() {
+            if arg_bounds.overlaps(&self.pool[top].bounds) {
+                match self.pool[top].node_type {
+                    BVHNodeType::Leaf(ref val) => {
+                        callback(val);
+                    },
+
+                    BVHNodeType::Parent(lchild, rchild) => {
+                        stack.push(lchild);
+                        stack.push(rchild);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Passe each found entry as a mutable reference to the callback.
+    pub fn query_mut<Arg, F>(&mut self, arg: &Arg, mut callback: F)
+    where
+        Arg: BoundedBy<B>,
+        F: FnMut(&mut V)
+    {
+        let len = self.len();
+        if len < 1 {
+            return;
+        }
+        let arg_bounds = arg.bounds();
+        // 64 entries should be enough, since 2^64 - 1 is the maximum number of
+        // items a Vec can store.
+        let mut stack = SmallVec::<[usize; 64]>::new();
+        // TODO: use the system stack first, then allocate.
+        // let cap = len + ((len as f32).log(2.0) as usize);
+        // let mut stack = Vec::with_capacity(cap);
+        stack.push(self.root);
+        while let Some(top) = stack.pop() {
+            if arg_bounds.overlaps(&self.pool[top].bounds) {
+                match self.pool[top].node_type {
+                    BVHNodeType::Leaf(ref mut val) => {
+                        callback(val);
+                    },
+
+                    BVHNodeType::Parent(lchild, rchild) => {
+                        stack.push(lchild);
+                        stack.push(rchild);
+                    }
+                }
+            }
+        }
+    }
+
     fn balance(&mut self, a: usize) -> usize {
         // This could be really cleaned up by using pointers instead of indices
         // everywhere.
@@ -390,7 +460,7 @@ impl<T> From<T> for BVHValueWrapper<T> {
     }
 }
 */
-
+/*
 impl<B, V, RHS> Collider<V, RHS> for BVH<B, V>
 where
     B: Bound,
@@ -428,12 +498,13 @@ where
         collided
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {
     mod bvh {
         use cgmath::{Point3};
-        use geom::{Sphere, AABB, Collider};
+        use geom::{Sphere, AABB};
         use bvh::BVH;
 
         #[test]
@@ -447,9 +518,11 @@ mod tests {
             bvh.insert(&sphere_b, 2);
             bvh.insert(&sphere_c, 3);
 
-            assert!(bvh.collide(&sphere_a, |id:usize|{ assert_eq!(id, 1); }));
-            assert!(bvh.collide(&sphere_b, |id:usize|{ assert_eq!(id, 2); }));
-            assert!(bvh.collide(&sphere_c, |id:usize|{ assert_eq!(id, 3); }));
+            let mut found: usize = 0;
+            bvh.query(&sphere_a, |&id| { found += 1; assert_eq!(id, 1); });
+            bvh.query(&sphere_b, |&id| { found += 1; assert_eq!(id, 2); });
+            bvh.query(&sphere_c, |&id| { found += 1; assert_eq!(id, 3); });
+            assert_eq!(found, 3);
         }
     }
 }

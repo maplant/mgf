@@ -17,10 +17,14 @@ use std::ops::{Add, Sub, Mul, Div};
 use cgmath::{EuclideanSpace, InnerSpace, Point3, Quaternion, Rotation, Vector3, Zero};
 
 use geom::*;
+use collision::*;
 
-/// Bounds are objects that can collide and combine with each other.
-/// They also can be scaled, extended, and have a center that can be moved,
-/// along with a surface area.
+/// A type that can overlap, contain, and be combined with one another.
+///
+/// Bounds can also be scaled and extended by scalar values to produce proxy
+/// volumes. They can also be rotated and have a surface area.
+/// 
+/// Bounds are Shapes and thus have a center and can be displaced.
 pub trait Bound
     : Copy
     + Add<Vector3<f32>, Output = Self>
@@ -30,8 +34,8 @@ pub trait Bound
     + Add<f32, Output = Self>           // Scalar extend
     + Sub<f32, Output = Self>           // Scalar shrink
     + Shape
-    + Collider<Overlaps, Self>
-    + Collider<Contains, Self>
+    + Overlaps<Self>
+    + Contains<Self>
 {
     /// Produce a bound that encloses the two arguments.
     fn combine(&Self, &Self) -> Self;
@@ -39,10 +43,11 @@ pub trait Bound
     /// Rotate the bound in place. This is useless for spheres.
     fn rotate(&self, Quaternion<f32>) -> Self;
 
+    /// Return a measure of the area of the object.
     fn surface_area(&self) -> f32;
 }
 
-/// Geometries that are bounded by a type may be inserted into a BVH tree.
+/// A type that can be decomposed into a bound. 
 pub trait BoundedBy<B: Bound> {
     fn bounds(&self) -> B;
 }
@@ -104,33 +109,24 @@ impl Sub<f32> for AABB {
     }
 }
 
-impl<T: BoundedBy<AABB>> Collider<Overlaps, AABB> for T {
-    fn check_collision(&self, b: &AABB) -> Option<Overlaps> {
+impl<Recv: BoundedBy<AABB>> Overlaps<AABB> for Recv {
+    fn overlaps(&self, b: &AABB) -> bool {
         let a = self.bounds();
-        if (a.c.x - b.c.x).abs() <= (a.r.x + b.r.x) && (a.c.y - b.c.y).abs() <= (a.r.y + b.r.y) &&
-            (a.c.z - b.c.z).abs() <= (a.r.z + b.r.z)
-        {
-            return Overlaps.into();
-        }
-        None
+        (a.c.x - b.c.x).abs() <= (a.r.x + b.r.x)
+            && (a.c.y - b.c.y).abs() <= (a.r.y + b.r.y)
+            && (a.c.z - b.c.z).abs() <= (a.r.z + b.r.z)
     }
 }
 
-impl<T: BoundedBy<AABB>> Collider<Contains, T> for AABB {
-    fn check_collision(&self, b: &T) -> Option<Contains> {
+impl<RHS: BoundedBy<AABB>> Contains<RHS> for AABB {
+    fn contains(&self, rhs: &RHS) -> bool {
         let a = *self;
-        let b = b.bounds();
+        let b = rhs.bounds();
         let b_max = b.c + b.r;
         let b_min = b.c + -b.r;
-        if a.check_collision(&b_max) == Some(Contains)
-            && a.check_collision(&b_min) == Some(Contains)
-        {
-            return Contains.into();
-        }
-        None
+        a.contains(&b_max) && a.contains(&b_min)
     }
 }
-
 
 impl Bound for AABB {
     /// The returned AABB is the smallest volume possible that encloses both
@@ -229,7 +225,7 @@ impl BoundedBy<AABB> for Triangle {
     }
 }
 
-impl BoundedBy<AABB> for Rect {
+impl BoundedBy<AABB> for Rectangle {
     fn bounds(&self) -> AABB {
         let p1 = self.c + self.u[0] * self.e[0];
         let p2 = self.c + self.u[1] * self.e[1];
@@ -299,26 +295,19 @@ impl Sub<f32> for Sphere {
     }
 }
 
-impl<T: BoundedBy<Sphere>> Collider<Overlaps, Sphere> for T {
-    fn check_collision(&self, b: &Sphere) -> Option<Overlaps> {
+impl<Recv: BoundedBy<Sphere>> Overlaps<Sphere> for Recv {
+    fn overlaps(&self, b: &Sphere) -> bool {
         let a = self.bounds();
         let r = a.r + b.r;
-        if (b.c - a.c).magnitude2() <= r * r {
-            return Overlaps.into();
-        }
-        None
+        (b.c - a.c).magnitude2() <= r * r
     }
 }
 
-
-impl<T: BoundedBy<Sphere>> Collider<Contains, T> for Sphere {
-    fn check_collision(&self, b: &T) -> Option<Contains> {
+impl<RHS: BoundedBy<Sphere>> Contains<RHS> for Sphere {
+    fn contains(&self, b: &RHS) -> bool {
         let a = *self;
         let b = b.bounds();
-        if ((b.c - a.c).magnitude() + b.r) <= a.r {
-            return Contains.into();
-        }
-        None
+        ((b.c - a.c).magnitude() + b.r) <= a.r
     }
 }
 
@@ -370,7 +359,7 @@ impl BoundedBy<Sphere> for Triangle {
     }
 }
 
-impl BoundedBy<Sphere> for Rect {
+impl BoundedBy<Sphere> for Rectangle {
     fn bounds(&self) -> Sphere {
         Sphere {
             c: self.c,
@@ -408,7 +397,8 @@ mod tests {
     mod bounds {
         use cgmath::{Point3, Vector3};
         use bounds::Bound;
-        use geom::{Collider, Contains, Overlaps, Sphere, AABB};
+        use geom::{Sphere, AABB};
+        use collision::{Contains, Overlaps};
 
         #[test]
         fn test_aabb() {
@@ -425,12 +415,12 @@ mod tests {
                 r: Vector3::new(1.0, 1.0, 1.0),
             };
             let combined = AABB::combine(&bound1, &bound2);
-            assert!(bound1.collide(&bound2, |_: Overlaps| {}));
-            assert!(!bound1.collide(&bound3, |_: Overlaps| {}));
-            assert!(!bound1.collide(&bound2, |_: Contains| {}));
-            assert!(combined.collide(&bound1, |_: Contains| {}));
-            assert!(combined.collide(&bound2, |_: Contains| {}));
-            assert!(!combined.collide(&bound3, |_: Contains| {}));
+            assert!(bound1.overlaps(&bound2));
+            assert!(!bound1.overlaps(&bound3));
+            assert!(!bound1.contains(&bound2));
+            assert!(combined.contains(&bound1));
+            assert!(combined.contains(&bound2));
+            assert!(!combined.contains(&bound3));
         }
 
         #[test]
@@ -448,12 +438,12 @@ mod tests {
                 r: 1.0,
             };
             let combined = Sphere::combine(&bound1, &bound2);
-            assert!(bound1.collide(&bound2, |_: Overlaps| {}));
-            assert!(!bound1.collide(&bound3, |_: Overlaps| {}));
-            assert!(!bound1.collide(&bound2, |_: Contains| {}));
-            assert!(combined.collide(&bound1, |_: Contains| {}));
-            assert!(combined.collide(&bound2, |_: Contains| {}));
-            assert!(!combined.collide(&bound3, |_: Contains| {}));
+            assert!(bound1.overlaps(&bound2));
+            assert!(!bound1.overlaps(&bound3));
+            assert!(!bound1.contains(&bound2));
+            assert!(combined.contains(&bound1));
+            assert!(combined.contains(&bound2));
+            assert!(!combined.contains(&bound3));
         }
 
         #[test]
@@ -475,18 +465,18 @@ mod tests {
             let combined_sphere = Sphere::combine(&bound1, &bound2.bounds());
             let combined_aabb = AABB::combine(&bound1.bounds(), &bound2);
             let combined_unknown = Bound::combine(&bound1, &bound2.bounds());
-            assert!(bound1.collide(&bound2, |_: Overlaps| {}));
-            assert!(!bound1.collide(&bound3, |_: Overlaps| {}));
-            assert!(!bound1.collide(&bound2, |_: Contains| {}));
-            assert!(combined_sphere.collide(&bound1, |_: Contains| {}));
-            assert!(combined_sphere.collide(&bound2, |_: Contains| {}));
-            assert!(!combined_sphere.collide(&bound3, |_: Contains| {}));
-            assert!(combined_aabb.collide(&bound1, |_: Contains| {}));
-            assert!(combined_aabb.collide(&bound2, |_: Contains| {}));
-            assert!(!combined_aabb.collide(&bound3, |_: Contains| {}));
-            assert!(combined_unknown.collide(&bound1, |_: Contains| {}));
-            assert!(combined_unknown.collide(&bound2, |_: Contains| {}));
-            assert!(!combined_unknown.collide(&bound3, |_: Contains| {}));
+            assert!(bound1.overlaps(&bound2));
+            assert!(!bound1.overlaps(&bound3));
+            assert!(!bound1.contains(&bound2));
+            assert!(combined_sphere.contains(&bound1));
+            assert!(combined_sphere.contains(&bound2));
+            assert!(!combined_sphere.contains(&bound3));
+            assert!(combined_aabb.contains(&bound1));
+            assert!(combined_aabb.contains(&bound2));
+            assert!(!combined_aabb.contains(&bound3));
+            assert!(combined_unknown.contains(&bound1));
+            assert!(combined_unknown.contains(&bound2));
+            assert!(!combined_unknown.contains(&bound3));
         }
     }
 }
