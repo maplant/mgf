@@ -136,7 +136,7 @@ impl Into<Plane> for Rectangle {
     }
 }
 
-/// An Axis Aligned Bounding Boxe.
+/// An Axis Aligned Bounding Box.
 ///
 /// AABBs are closed boxes aligned to the axes of the coordinate system. AABBs
 /// are described by a point and three half widths.
