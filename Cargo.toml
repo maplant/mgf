@@ -1,0 +1,20 @@
+[package]
+name = "mgf"
+version = "0.1.0"
+authors = ["Matthew Plant <maplant95@gmail.com>"]
+license = "LGPL-3.0"
+description = "A 3D collision and physics framework for video games."
+
+documentation = "https://docs.rs/mgf"
+homepage = "https://github.com/DataAnalysisCosby/mgf"
+repository = "https://github.com/DataAnalysisCosby/mgf"
+readme = "README.org"
+
+keywords = [ "3D", "physics", "collision", "math", "gamedev" ]
+
+[lib]
+name = "mgf"
+
+[dependencies]
+cgmath = "0.15"
+smallvec = "0.5.0"
