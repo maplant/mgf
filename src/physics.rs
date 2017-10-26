@@ -297,8 +297,7 @@ pub struct PhysicsState {
     /// advantage that we can represent immovable objects with an infinite mass,
     /// or an inverse mass of zero.
     pub inv_mass: f32,
-    /// After our inital tensor calculation it is up to the containing class to
-    /// maintain the correct tensor should hitboxes beyond their inital state.
+    /// The inverse moment of inertia tensor of the object correctly oriented.
     pub inv_moment: Matrix3<f32>,
     /// Position of the object at the beginning of the timestep.
     pub x: Point3<f32>,

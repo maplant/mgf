@@ -1297,13 +1297,13 @@ impl Neg for LocalContact {
     }
 }
 
-/// A type that produce a point of contact with another and convert it to local
-/// coordinates.
+/// A type that can produce a point of contact with another and convert it to
+/// local coordinates.
 ///
 /// Because the points in a Contact are global at the time of collision, they
-/// are not immediately useful. Upon being translated to local coordinates, which
-/// refer to the points as if the origin was the center of the object they belong
-/// to.
+/// are not immediately useful to physics resolution. Upon being translated to
+/// local coordinates, which refer to the points as if the origin was the center
+/// of the object they belong to.
 pub trait LocalContacts<RHS> {
     /// Calls the closure for each contact found. Returns true if any contact was
     /// found.

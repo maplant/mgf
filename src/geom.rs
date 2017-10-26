@@ -115,7 +115,7 @@ impl From<Triangle> for Plane {
     }
 }
 
-/// A center point, two direction, and two half widths.
+/// A center point, two directions, and two half widths.
 #[derive(Copy, Clone)]
 pub struct Rectangle {
     /// The center of the rectangle.
@@ -151,7 +151,7 @@ pub struct AABB {
 
 /// A point and a distance.
 ///
-/// Like AABBs, spheres as closed volumes.
+/// Like AABBs, spheres are closed volumes.
 #[derive(Copy, Clone, Debug)]
 pub struct Sphere {
     /// The center point of the sphere.

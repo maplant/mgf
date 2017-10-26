@@ -7,6 +7,8 @@
 
 MGF is a collision detection and physics library for use in 3D video games.
 
+MGF is intended to very light weight and uses cgmath as a math backend.
+
 The library provides various features such as:
 
 - structures to define shapes: `Ray`, `Segment`, `AABB`, `Rectangle`, `Triangle`, `Sphere`, `Capsule`

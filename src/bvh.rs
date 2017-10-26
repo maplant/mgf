@@ -451,54 +451,18 @@ where
     }
 }
 
-/*
-pub struct BVHValueWrapper<T>(pub T);
-
-impl<T> From<T> for BVHValueWrapper<T> {
-    fn from(t: T) -> Self {
-        BVHValueWrapper(t)
-    }
-}
-*/
-/*
-impl<B, V, RHS> Collider<V, RHS> for BVH<B, V>
+impl<B, V> BoundedBy<B> for BVH<B, V>
 where
-    B: Bound,
-    V: Clone,
-    RHS: Collider<Overlaps, B>,
+    B: Bound
 {
-    fn collide<F: FnMut(V)>(&self, rhs: &RHS, mut callback: F) -> bool {
-        let len = self.len();
-        if len < 1 {
-            return false;
+    #[inline(always)]
+    fn bounds(&self) -> B {
+        if self.empty() {
+            panic!("BVH is empty and thus has no bounds");
         }
-        // 64 entries should be enough, since 2^64 - 1 is the maximum number of
-        // items a Vec can store.
-        let mut stack = SmallVec::<[usize; 64]>::new();
-        // TODO: use the system stack first, then allocate.
-        // let cap = len + ((len as f32).log(2.0) as usize);
-        // let mut stack = Vec::with_capacity(cap);
-        stack.push(self.root);
-        let mut collided = false;
-        while let Some(top) = stack.pop() {
-            if rhs.collide(&self.pool[top].bounds, |_| {}) {
-                match self.pool[top].node_type {
-                    BVHNodeType::Leaf(ref val) => {
-                        collided = true;
-                        callback(val.clone());
-                    },
-
-                    BVHNodeType::Parent(lchild, rchild) => {
-                        stack.push(lchild);
-                        stack.push(rchild);
-                    }
-                }
-            }
-        }
-        collided
+        self.pool[self.root].bounds
     }
 }
-*/
 
 #[cfg(test)]
 mod tests {
