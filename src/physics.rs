@@ -72,7 +72,7 @@ impl Inertia for Component {
     }
 }
 
-/// A eneric physical body that has a mass, a volume, and experiences linear and
+/// A generic physical body that has a mass, a volume, and experiences linear and
 /// rotational movement.
 ///
 /// A RigidBody is technically a shape, although its geomtries are all considered
