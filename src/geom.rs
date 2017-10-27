@@ -141,7 +141,7 @@ impl Into<Plane> for Rectangle {
 /// AABBs are closed boxes aligned to the axes of the coordinate system. AABBs
 /// are described by a point and three half widths.
 ///
-/// AABB's being Closed means that a point lying on the surface of the AABB is
+/// AABB's being closed means that a point lying on the surface of the AABB is
 /// considered contained by the AABB.
 #[derive(Copy, Clone, Debug)]
 pub struct AABB {

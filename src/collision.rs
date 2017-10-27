@@ -1246,7 +1246,7 @@ where
     }
 }
 
-/// Any two moving object collision can be reduced to a one moving one static.
+/// Any two moving object collision can be reduced to a one moving one static
 /// object collision. This is done by finding the relative velocity between the
 /// two objects.
 impl<Recv, Arg> Contacts<Moving<Arg>> for Moving<Recv>

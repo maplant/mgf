@@ -290,7 +290,7 @@ pub struct PhysicsState {
     /// collision. 100% of kinetic energy retention corresponds to a coefficient
     /// of one.
     pub restitution: f32,
-    /// We simply friction in this case to simply be a ratio of the normal force
+    /// We simplify friction in this case to simply be a ratio of the normal force
     /// applied tangentially to an object during collision.
     pub friction: f32,
     /// We only ever need inverse mass for calcuations, plus it gives a neat
@@ -299,11 +299,11 @@ pub struct PhysicsState {
     pub inv_mass: f32,
     /// The inverse moment of inertia tensor of the object correctly oriented.
     pub inv_moment: Matrix3<f32>,
-    /// Position of the object at the beginning of the timestep.
+    /// The position of the object at the end of the timestep.
     pub x: Point3<f32>,
-    /// Linear velocity of object
+    /// The linear velocity of the object
     pub v: Vector3<f32>,
-    /// Angular velocity of object
+    /// The angular velocity of the object
     pub omega: Vector3<f32>,
 }
 

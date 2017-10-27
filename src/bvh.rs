@@ -117,7 +117,7 @@ impl<B: Bound, V> BVH<B, V> {
         })
     }
 
-    /// Inserts an item ino the BVH, rebalancing if necessary. All IDs returned
+    /// Inserts an item into the BVH, rebalancing if necessary. All IDs returned
     /// prior to insert remain valid afterward.
     pub fn insert<K: BoundedBy<B>>(&mut self, key: &K, val: V) -> usize {
         self.num_leaves += 1;
@@ -259,7 +259,7 @@ impl<B: Bound, V> BVH<B, V> {
         self.root
     }
 
-    /// Find each entry in the BVH that has a bound that Overlaps the bound of
+    /// Find each entry in the BVH that has a bound that overlaps the bound of
     /// the passed object.
     pub fn query<Arg, F>(&self, arg: &Arg, mut callback: F)
     where
@@ -294,7 +294,7 @@ impl<B: Bound, V> BVH<B, V> {
         }
     }
 
-    /// Passe each found entry as a mutable reference to the callback.
+    /// Pass each found entry as a mutable reference to the callback.
     pub fn query_mut<Arg, F>(&mut self, arg: &Arg, mut callback: F)
     where
         Arg: BoundedBy<B>,

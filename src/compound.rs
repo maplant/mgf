@@ -33,7 +33,7 @@ pub enum Component {
 }
 
 impl Component {
-    /// Rotates the component abound the origin.
+    /// Rotates the component around the origin.
     pub fn rotate(self, r: Quaternion<f32>) -> Self {
         match self {
             Component::Sphere(s) => Component::Sphere(s.rotate(r)),
