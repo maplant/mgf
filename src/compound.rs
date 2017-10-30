@@ -121,6 +121,15 @@ impl BoundedBy<Sphere> for Component {
     }
 }
 
+impl<P: Particle> Intersects<Component> for P {
+    fn intersection(&self, rhs: &Component) -> Option<Intersection> {
+        match rhs {
+            &Component::Sphere(ref s) => self.intersection(s),
+            &Component::Capsule(ref c) => self.intersection(c),
+        }
+    }
+}
+
 macro_rules! impl_component_collision {
     (
         $recv:ty
@@ -162,18 +171,19 @@ pub struct Compound {
     pub disp: Vector3<f32>,
     /// The rotation of the object. Assumed to be normalized.
     pub rot: Quaternion<f32>,
-    /// The geometries the compound is composed of.
-    pub shapes: Vec<Component>,
-    /// BVH storing the bounds of the components to improve collision
-    /// efficiency.
-    pub bvh: BVH<AABB, usize>,
+    /// Indices of the geometries composing the compound in the BVH.
+    /// One-to-one with the constructing vector.
+    pub shapes: Vec<usize>,
+    /// BVH storing the components to improve collision efficiency.
+    pub bvh: BVH<AABB, Component>,
 }
 
 impl Compound {
-    pub fn new(shapes: Vec<Component>) -> Self {
-        let mut bvh: BVH<AABB, usize> = BVH::new();
-        for (i, component) in shapes.iter().enumerate() {
-            bvh.insert(component, i);
+    pub fn new(components: Vec<Component>) -> Self {
+        let mut bvh: BVH<AABB, Component> = BVH::new();
+        let mut shapes: Vec<usize> = Vec::with_capacity(components.len());
+        for component in components.iter() {
+            shapes.push(bvh.insert(component, *component));
         }
         Compound {
             disp: Vector3::zero(),
@@ -219,6 +229,31 @@ impl Shape for Compound {
     }
 }
 
+impl<P: Particle> Intersects<Compound> for P {
+    fn intersection(&self, rhs: &Compound) -> Option<Intersection> {
+        let conj_rot = rhs.rot.conjugate();
+        let p = conj_rot.rotate_point(self.pos() + -rhs.disp) + rhs.disp;
+        let d = conj_rot.rotate_vector(self.dir());
+        let r = Ray{ p, d };
+        let mut result: Option<Intersection> = None;
+        rhs.bvh.raytrace(&r, |&comp, inter| {
+            if inter.t > P::DT {
+                return;
+            }
+            let shape = comp.rotate(rhs.rot) + rhs.disp;
+            if let Some(inter) = self.intersection(&shape) {
+                if let Some(res) = result {
+                    if inter.t > res.t {
+                        return;
+                    }
+                }
+                result = Some(inter)
+            }
+        });
+        result
+    }
+}
+
 impl<RHS> Contacts<RHS> for Compound
 where
     RHS: Contacts<Component> + BoundedBy<AABB>
@@ -231,8 +266,8 @@ where
         let bounds_disp = conj_rot.rotate_point(rhs_center + -self.disp) + self.disp;
         rhs_bounds.set_pos(bounds_disp);
         let mut collided = false;
-        self.bvh.query(&rhs_bounds, |&comp_i| {
-            let shape = self.shapes[comp_i].rotate(self.rot) + self.disp;
+        self.bvh.query(&rhs_bounds, |&comp| {
+            let shape = comp.rotate(self.rot) + self.disp;
             rhs.contacts(&shape, |c| { collided = true; callback(-c) });
         });
         collided
@@ -270,7 +305,9 @@ mod tests {
                 e: [ 6.0, 6.0 ],
             };
 
-            let _contact: Contact = static_rect.last_contact(&Moving::sweep(compound.shapes[0], Vector3::new(0.0, -3.0, 0.0))).unwrap();
+            compound.rot = Quaternion::one();
+
+            let _contact: Contact = compound.last_contact(&Moving::sweep(static_rect, Vector3::new(0.0, 3.0, 0.0))).unwrap();
         }
     }
 }

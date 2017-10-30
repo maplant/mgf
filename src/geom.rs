@@ -216,7 +216,7 @@ impl From<Moving<Sphere>> for Capsule {
 
 /// A geometry swept accross a given path of motion.
 #[derive(Copy, Clone, Debug)]
-pub struct Moving<T: Copy + Clone + Shape>(pub T, pub Vector3<f32>);
+pub struct Moving<T: Shape>(pub T, pub Vector3<f32>);
 
 impl<T: Copy + Clone + Shape> Moving<T> {
     /// Create a moving object with velocity of vel
@@ -230,7 +230,7 @@ impl<T: Copy + Clone + Shape> Moving<T> {
     }
 }
 
-impl<T: Copy + Clone + Shape> AsRef<T> for Moving<T> {
+impl<T: Shape> AsRef<T> for Moving<T> {
     fn as_ref(&self) -> &T {
         &self.0
     }
@@ -241,7 +241,7 @@ pub trait Delta {
     fn delta(&self) -> Vector3<f32>;
 }
 
-impl<T: Copy + Clone + Shape> Delta for Moving<T> {
+impl<T: Shape> Delta for Moving<T> {
     fn delta(&self) -> Vector3<f32> {
         self.1
     }
@@ -664,34 +664,77 @@ impl Shape for Capsule {
     }
 }
 
+/// A type that is linear in nature.
+///
+/// Particle types are used to represent the motion of point particles in space.
+/// Point particles do not have any spatial extent, i.e. volume.
+pub trait Particle : Shape + Copy {
+    /// The length of the timestep.
+    const DT: f32;
+
+    /// The origin of the particle.
+    fn pos(&self) -> Point3<f32>;
+
+    /// The direction of the particle.
+    fn dir(&self) -> Vector3<f32>;
+}
+
+/// A ray represents a point particle traveling in a direction with infinite
+/// velocity.
+impl Particle for Ray {
+    const DT: f32 = f32::INFINITY;
+
+    fn pos(&self) -> Point3<f32> {
+        self.p
+    }
+
+    fn dir(&self) -> Vector3<f32> {
+        self.d
+    }
+}
+
+
+/// A segment represents a point particle traveling in a direction with finite
+/// velocity.
+impl Particle for Segment {
+    const DT: f32 = 1.0;
+
+    fn pos(&self) -> Point3<f32> {
+        self.a
+    }
+
+    fn dir(&self) -> Vector3<f32> {
+        self.b - self.a
+    }
+}
+
 /// A type that is composed of vertices, edges and has a face.
 ///
 /// Besides being able to present their vertices and edges, a Polygon can
 /// produce a reference to some a face, which is a type that can be
 /// decomposed into a plane and determine if it contains a point.
-pub trait Polygon : Shape {
-    /// Type of the face object the polygon returns. 
-    type FaceType: collision::Contains<Point3<f32>> + Into<Plane> + Clone;
-
-    /// The number of edges available to query.
-    fn num_vertices(&self) -> usize;
+pub trait Polygon
+    : Copy
+    + Shape
+    + collision::Contains<Point3<f32>>
+    + Into<Plane>
+{
+    /// The number of vertices and edges available to query.
+    const NUM_VERTICES: usize;
 
     /// Returns the ith vertex as a Point.
     fn vertex(&self, usize) -> Point3<f32>;
 
-    /// The number of edges available to query.
-    fn num_edges(&self) -> usize;
-
     /// Returns the ith edge of the polygon as a pair of indices.
+    ///
+    /// In the future this is hoped to be deprecate in favore of a constant
+    /// associated array. Unfortunately it is impossible as of this yet moment
+    /// to have arrays depend on associated constants yet.
     fn edge(&self, usize) -> (usize, usize);
-
-    fn face(&self) -> &Self::FaceType;
 }
 
 impl Polygon for Triangle {
-    type FaceType = Self;
-
-    fn num_vertices(&self) -> usize { 3 }
+    const NUM_VERTICES: usize = 3;
 
     fn vertex(&self, i: usize) -> Point3<f32> {
         // I really hope this becomes a single copy instead of three, Rust
@@ -699,19 +742,14 @@ impl Polygon for Triangle {
         Point3::from_vec([self.a, self.b, self.c][i])
     }
 
-    fn num_edges(&self) -> usize { 3 }
-
+    #[inline(always)]
     fn edge(&self, i: usize) -> (usize, usize) {
         [(0, 1), (1, 2), (2, 0)][i]
     }
-
-    fn face(&self) -> &Triangle { self }
 }
 
 impl Polygon for Rectangle {
-    type FaceType = Self;
-
-    fn num_vertices(&self) -> usize { 4 }
+    const NUM_VERTICES: usize = 4;
 
     fn vertex(&self, i: usize) -> Point3<f32> {
         match i {
@@ -727,11 +765,15 @@ impl Polygon for Rectangle {
         }
     }
 
-    fn num_edges(&self) -> usize { 4 }
-
+    #[inline(always)]
     fn edge(&self, i: usize) -> (usize, usize) {
         [(0, 1), (1, 2), (2, 3), (3, 0)][i]
     }
-
-    fn face(&self) -> &Rectangle { self }
 }
+
+/// A type that has volume.
+pub trait Volumetric {}
+
+impl Volumetric for AABB {}
+impl Volumetric for Sphere {}
+impl Volumetric for Capsule {}

@@ -109,25 +109,6 @@ impl Sub<f32> for AABB {
     }
 }
 
-impl<Recv: BoundedBy<AABB>> Overlaps<AABB> for Recv {
-    fn overlaps(&self, b: &AABB) -> bool {
-        let a = self.bounds();
-        (a.c.x - b.c.x).abs() <= (a.r.x + b.r.x)
-            && (a.c.y - b.c.y).abs() <= (a.r.y + b.r.y)
-            && (a.c.z - b.c.z).abs() <= (a.r.z + b.r.z)
-    }
-}
-
-impl<RHS: BoundedBy<AABB>> Contains<RHS> for AABB {
-    fn contains(&self, rhs: &RHS) -> bool {
-        let a = *self;
-        let b = rhs.bounds();
-        let b_max = b.c + b.r;
-        let b_min = b.c + -b.r;
-        a.contains(&b_max) && a.contains(&b_min)
-    }
-}
-
 impl Bound for AABB {
     /// The returned AABB is the smallest volume possible that encloses both
     /// arguments. At least I think, I Can't remember if that claim is true.
@@ -295,22 +276,6 @@ impl Sub<f32> for Sphere {
     }
 }
 
-impl<Recv: BoundedBy<Sphere>> Overlaps<Sphere> for Recv {
-    fn overlaps(&self, b: &Sphere) -> bool {
-        let a = self.bounds();
-        let r = a.r + b.r;
-        (b.c - a.c).magnitude2() <= r * r
-    }
-}
-
-impl<RHS: BoundedBy<Sphere>> Contains<RHS> for Sphere {
-    fn contains(&self, b: &RHS) -> bool {
-        let a = *self;
-        let b = b.bounds();
-        ((b.c - a.c).magnitude() + b.r) <= a.r
-    }
-}
-
 impl Bound for Sphere {
     fn combine(a: &Sphere, b: &Sphere) -> Sphere {
         let d = b.c - a.c;
@@ -467,15 +432,18 @@ mod tests {
             let combined_unknown = Bound::combine(&bound1, &bound2.bounds());
             assert!(bound1.overlaps(&bound2));
             assert!(!bound1.overlaps(&bound3));
-            assert!(!bound1.contains(&bound2));
+            let bound2_bound: Sphere = bound2.bounds();
+            assert!(!bound1.contains(&bound2_bound));
             assert!(combined_sphere.contains(&bound1));
-            assert!(combined_sphere.contains(&bound2));
+            assert!(combined_sphere.contains(&bound2_bound));
             assert!(!combined_sphere.contains(&bound3));
-            assert!(combined_aabb.contains(&bound1));
+            let bound1_bound: AABB = bound1.bounds();
+            assert!(combined_aabb.contains(&bound1_bound));
             assert!(combined_aabb.contains(&bound2));
-            assert!(!combined_aabb.contains(&bound3));
+            let bound3_bound: AABB = bound3.bounds();
+            assert!(!combined_aabb.contains(&bound3_bound));
             assert!(combined_unknown.contains(&bound1));
-            assert!(combined_unknown.contains(&bound2));
+            assert!(combined_unknown.contains(&bound2_bound));
             assert!(!combined_unknown.contains(&bound3));
         }
     }

@@ -21,6 +21,8 @@ use smallvec::SmallVec;
 use bounds::{Bound, BoundedBy};
 use pool::Pool;
 
+use collision::{Intersects, Intersection};
+
 /// A Bounding Volume Hierarchy.
 pub struct BVH<B: Bound, V> {
     root: usize,
@@ -256,11 +258,17 @@ impl<B: Bound, V> BVH<B, V> {
 
     /// Returns the index of the root node.
     pub fn root(&self) -> usize {
+        if self.empty() {
+            panic!("BVH is empty, there is no root node");
+        }
         self.root
     }
 
-    /// Find each entry in the BVH that has a bound that overlaps the bound of
-    /// the passed object.
+    /// Finds each entry in the BVH that has a bound that overlaps the bound of
+    /// the passed object. Performs a depth first search for all objects.
+    ///
+    /// callback is called for each entry that overlaps arg. A reference to the
+    /// value stored at the leaf is passed.
     pub fn query<Arg, F>(&self, arg: &Arg, mut callback: F)
     where
         Arg: BoundedBy<B>,
@@ -274,9 +282,6 @@ impl<B: Bound, V> BVH<B, V> {
         // 64 entries should be enough, since 2^64 - 1 is the maximum number of
         // items a Vec can store.
         let mut stack = SmallVec::<[usize; 64]>::new();
-        // TODO: use the system stack first, then allocate.
-        // let cap = len + ((len as f32).log(2.0) as usize);
-        // let mut stack = Vec::with_capacity(cap);
         stack.push(self.root);
         while let Some(top) = stack.pop() {
             if arg_bounds.overlaps(&self.pool[top].bounds) {
@@ -294,7 +299,11 @@ impl<B: Bound, V> BVH<B, V> {
         }
     }
 
-    /// Pass each found entry as a mutable reference to the callback.
+    /// Finds each entry in the BVH that has a bound that overlaps the bound of
+    /// the passed object. Performs a depth first search for all objects.
+    ///
+    /// callback is called for each entry that overlaps arg. A mutable reference
+    /// to the value stored at the leaf is passed.
     pub fn query_mut<Arg, F>(&mut self, arg: &Arg, mut callback: F)
     where
         Arg: BoundedBy<B>,
@@ -305,18 +314,41 @@ impl<B: Bound, V> BVH<B, V> {
             return;
         }
         let arg_bounds = arg.bounds();
-        // 64 entries should be enough, since 2^64 - 1 is the maximum number of
-        // items a Vec can store.
         let mut stack = SmallVec::<[usize; 64]>::new();
-        // TODO: use the system stack first, then allocate.
-        // let cap = len + ((len as f32).log(2.0) as usize);
-        // let mut stack = Vec::with_capacity(cap);
         stack.push(self.root);
         while let Some(top) = stack.pop() {
             if arg_bounds.overlaps(&self.pool[top].bounds) {
                 match self.pool[top].node_type {
                     BVHNodeType::Leaf(ref mut val) => {
                         callback(val);
+                    },
+
+                    BVHNodeType::Parent(lchild, rchild) => {
+                        stack.push(lchild);
+                        stack.push(rchild);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Finds all entries that intersect a ray or segment.
+    pub fn raytrace<Arg, F>(&self, arg: &Arg, mut callback: F)
+    where
+        Arg: Intersects<B>,
+        F: FnMut(&V, Intersection)
+    {
+        let len = self.len();
+        if len < 1 {
+            return;
+        }
+        let mut stack = SmallVec::<[usize; 64]>::new();
+        stack.push(self.root);
+        while let Some(top) = stack.pop() {
+            if let Some(inter) = arg.intersection(&self.pool[top].bounds) {
+                match self.pool[top].node_type {
+                    BVHNodeType::Leaf(ref val) => {
+                        callback(val, inter);
                     },
 
                     BVHNodeType::Parent(lchild, rchild) => {

@@ -204,9 +204,9 @@ where
         rhs_bounds.set_pos(bounds_disp);
         let rhs_bounds: AABB = Moving::sweep(rhs_bounds, -self.v_step).bounds();
         let mut collided = false;
-        self.collider.bvh.query(&rhs_bounds, |&comp_i| {
+        self.collider.bvh.query(&rhs_bounds, |&comp| {
             let shape = Moving::sweep(
-                self.collider.shapes[comp_i].rotate(self.collider.rot) + self.collider.disp,
+                comp.rotate(self.collider.rot) + self.collider.disp,
                 self.v_step
             );
             rhs.contacts(&shape, |c| { collided = true; callback(-c) });
@@ -247,12 +247,13 @@ where
     }
 }
 
-impl<'a, S, RHS> Intersects<RHS> for StaticBody<'a, S>
+impl<'a, P, S> Intersects<StaticBody<'a, S>> for P
 where
-    S: Intersects<RHS> + Shape
+    P: Intersects<S>,
+    S: Shape
 {
-    fn intersection(&self, rhs: &RHS) -> Option<Intersection> {
-        self.shape.intersection(rhs)
+    fn intersection(&self, rhs: &StaticBody<'a, S>) -> Option<Intersection> {
+        self.intersection(rhs.shape)
     }
 }
 

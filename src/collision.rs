@@ -18,6 +18,55 @@ pub trait Overlaps<RHS> {
     fn overlaps(&self, rhs: &RHS) -> bool;
 }
 
+impl Overlaps<AABB> for AABB {
+    fn overlaps(&self, rhs: &AABB) -> bool {
+        // TODO: Add SIMD version of this
+        (self.c.x - rhs.c.x).abs() <= (self.r.x + rhs.r.x)
+            && (self.c.y - rhs.c.y).abs() <= (self.r.y + rhs.r.y)
+            && (self.c.z - rhs.c.z).abs() <= (self.r.z + rhs.r.z)
+    }
+}
+
+impl Overlaps<Sphere> for AABB {
+    #[inline(always)]
+    fn overlaps(&self, rhs: &Sphere) -> bool {
+        rhs.overlaps(self)
+    }
+}
+
+impl Overlaps<AABB> for Sphere {
+    fn overlaps(&self, rhs: &AABB) -> bool {
+        // TODO: Add SIMD version of this
+        let mut d = 0.0;
+        for i in 0..3 {
+            let e = self.c[i] - (rhs.c[i] - rhs.r[i]);
+            if e < 0.0 {
+                if e < -self.r {
+                    return false;
+                }
+                d += e * e;
+            } else {
+                // This feels... wrong given my AABB representation.
+                let e = self.c[i] - (rhs.c[i] + rhs.r[i]);
+                if e > 0.0 {
+                    if e > self.r {
+                        return false;
+                    }
+                    d += e * e;
+                }
+            }
+        }
+        d <= self.r * self.r
+    }
+}
+
+impl Overlaps<Sphere> for Sphere {
+    fn overlaps(&self, rhs: &Sphere) -> bool {
+        let r = self.r + rhs.r;
+        (rhs.c - self.c).magnitude2() <= r * r
+    }
+}
+
 /// A type that can completely subsume another.
 ///
 /// Contains is another common form of discrete collision detection. Most often
@@ -76,6 +125,27 @@ impl Contains<Point3<f32>> for Sphere {
     }
 }
 
+
+impl Contains<AABB> for AABB {
+    fn contains(&self, rhs: &AABB) -> bool {
+        let rhs_max = rhs.c + rhs.r;
+        let rhs_min = rhs.c + -rhs.r;
+        self.contains(&rhs_max) && self.contains(&rhs_min)
+    }
+}
+
+/// An important consequence of Spheres being closed: two spheres with the same
+/// center and radius contain each other. 
+impl Contains<Sphere> for Sphere {
+    fn contains(&self, rhs: &Sphere) -> bool {
+        if self.r < rhs.r {
+            return false;
+        } 
+        let r = self.r - rhs.r;
+        (rhs.c - self.c).magnitude2() <= r * r
+    }
+}
+
 /// A collision between a non-volumetric object and a volumetric object.
 #[derive(Copy, Clone, Debug)]
 pub struct Intersection {
@@ -89,56 +159,60 @@ pub struct Intersection {
 /// A type that can collide with a volumetric object and produce a single point
 /// of contact.
 ///
-/// Intersects is implemented on volumetric object for linear objects such as
-/// Rays and Segments, although the intersection operation is commutative.
-pub trait Intersects<RHS> {
+/// Intersects for particle types implements collisions against volumetric and
+/// planar geometries. Intersects is not a commutative operator. 
+pub trait Intersects<RHS> : Particle {
     /// Returns an Intersection if one exists.
     fn intersection(&self, rhs: &RHS) -> Option<Intersection>;
 }
 
-macro_rules! commute_intersection {
-    (
-        $recv:ty, $arg:ty
-    ) => {
-        impl Intersects<$arg> for $recv {
-            fn intersection(&self, rhs: &$arg) -> Option<Intersection> {
-                rhs.intersection(self)
-            }
-        }
-    };
-}
-
-impl Intersects<Ray> for Plane {
-    fn intersection(&self, r: &Ray) -> Option<Intersection> {
-        let denom = self.n.dot(r.d);
+impl<P: Particle> Intersects<Plane> for P {
+    fn intersection(&self, p: &Plane) -> Option<Intersection> {
+        let denom = p.n.dot(self.dir());
         if denom == 0.0 {
             return None;
         }
-        let t = (self.d - self.n.dot(r.p.to_vec())) / denom;
-        if t <= 0.0 {
+        let t = (p.d - p.n.dot(self.pos().to_vec())) / denom;
+        if t <= 0.0 || t > P::DT {
             return None;
         }
         Intersection {
-            p: r.p + r.d * t,
+            p: self.pos() + self.dir() * t,
             t,
         }.into()
     }
 }
 
-commute_intersection!{ Ray, Plane }
+impl<Part, Poly> Intersects<Poly> for Part
+where
+    Part: Particle,
+    Poly: Polygon
+{
+    fn intersection(&self, poly: &Poly) -> Option<Intersection> {
+        let p: Plane = (*poly).into();
+        if let Some(inter) = self.intersection(&p) {
+            if poly.contains(&inter.p) {
+                return inter.into();
+            }
+        }
+        None
+    }
+}
 
-impl Intersects<AABB> for Ray {
+impl<P: Particle> Intersects<AABB> for P {
     fn intersection(&self, a: &AABB) -> Option<Intersection> {
         let (mut t_min, mut t_max): (f32, f32) = (0.0, f32::INFINITY);
+        let p = self.pos();
+        let d = self.dir();
         for dim in 0..3 {
-            if self.d[dim].abs() < COLLISION_EPSILON {
-                if (self.p[dim] - a.c[dim]).abs() > a.r[dim] {
+            if d[dim].abs() < COLLISION_EPSILON {
+                if (p[dim] - a.c[dim]).abs() > a.r[dim] {
                     return None;
                 }
             } else {
-                let ood = 1.0 / self.d[dim];
-                let t1 = (a.c[dim] - a.r[dim] - self.p[dim]) * ood;
-                let t2 = (a.c[dim] + a.r[dim] - self.p[dim]) * ood;
+                let ood = 1.0 / d[dim];
+                let t1 = (a.c[dim] - a.r[dim] - p[dim]) * ood;
+                let t2 = (a.c[dim] + a.r[dim] - p[dim]) * ood;
                 if t1 > t2 {
                     t_min = t_min.max(t2);
                     t_max = t_max.min(t1);
@@ -151,18 +225,23 @@ impl Intersects<AABB> for Ray {
                 }
             }
         }
+        if t_min > P::DT {
+            return None;
+        }
         Intersection {
-            p: self.p + self.d * t_min,
+            p: p + d * t_min,
             t: t_min,
         }.into()
     }
 }
 
-impl Intersects<Sphere> for Ray {
+impl<P: Particle> Intersects<Sphere> for P {
     fn intersection(&self, s: &Sphere) -> Option<Intersection> {
-        let m = self.p - s.c;
-        let a = self.d.dot(self.d);
-        let b = m.dot(self.d);
+        let p = self.pos();
+        let d = self.dir();
+        let m = p - s.c;
+        let a = d.magnitude2();
+        let b = m.dot(d);
         let c = m.magnitude2() - s.r * s.r;
         if c > 0.0 && b > 0.0 {
             return None;
@@ -172,30 +251,35 @@ impl Intersects<Sphere> for Ray {
             return None;
         }
         let t = ((-b - discr.sqrt()) / a).max(0.0);
+        if t > P::DT {
+            return None;
+        }
         Intersection {
-            p: self.p + t * self.d,
+            p: p + t * d,
             t,
         }.into()
     }
 }
- 
-impl Intersects<Capsule> for Ray {
+
+impl<P: Particle> Intersects<Capsule> for P {
     fn intersection(&self, cap: &Capsule) -> Option<Intersection> {
         // This code is horrible and needs to be completely redone.
-        let m = self.p - cap.a;
+        let p = self.pos();
+        let d = self.dir();
+        let m = p - cap.a;
         let md = m.dot(cap.d);
-        let nd = self.d.dot(cap.d);
+        let nd = d.dot(cap.d);
         let dd = cap.d.dot(cap.d);
-        let nn = self.d.dot(self.d);
-        let mn = m.dot(self.d);
+        let nn = d.magnitude2();
+        let mn = m.dot(d);
         let a = dd * nn - nd * nd;
-        let k = m.dot(m) - cap.r * cap.r;
+        let k = m.magnitude2() - cap.r * cap.r;
         if a.abs() < COLLISION_EPSILON {
             let (b, c) = if md < 0.0 {
                 (mn, k)
             } else if md > dd {
-                let m2 = self.p - (cap.a + cap.d);
-                (m2.dot(self.d), m2.dot(m2) - cap.r * cap.r)
+                let m2 = p - (cap.a + cap.d);
+                (m2.dot(d), m2.magnitude2() - cap.r * cap.r)
             } else {
                 // Already colliding
                 return None;
@@ -208,8 +292,11 @@ impl Intersects<Capsule> for Ray {
                 return None;
             }
             let t = ((-b - discr.sqrt()) / nn).max(0.0);
+            if t > P::DT {
+                return None;
+            }
             return Intersection {
-                p: self.p + t * self.d,
+                p: p + t * d,
                 t,
             }.into()
         }
@@ -236,8 +323,8 @@ impl Intersects<Capsule> for Ray {
             }
             ((-mn - discr.sqrt()) / nn).max(0.0)
         } else if md + t * nd > dd {
-            let m2 = self.p - (cap.a + cap.d);
-            let b = m2.dot(self.d);
+            let m2 = p - (cap.a + cap.d);
+            let b = m2.dot(d);
             let c = m2.magnitude2() - cap.r * cap.r;
             if c > 0.0 && b > 0.0 {
                 return None;
@@ -250,14 +337,17 @@ impl Intersects<Capsule> for Ray {
         } else {
             t
         };
+        if t > P::DT {
+            return None;
+        }
         Intersection {
-                p: self.p + t * self.d,
+                p: p + t * d,
                 t,
         }.into()
     }
 }
 
-impl Intersects<Moving<Sphere>> for Ray {
+impl<P: Particle> Intersects<Moving<Sphere>> for P {
     fn intersection(&self, s: &Moving<Sphere>) -> Option<Intersection> {
         // ray intersection with moving spheres is exactly the same problem as
         // capsule intersection
@@ -271,68 +361,6 @@ impl Intersects<Moving<Sphere>> for Ray {
     }
 }
 
-commute_intersection!{ Ray, Triangle }
-commute_intersection!{ Ray, Rectangle }
-
-/// Anything that can collide with a ray can collide with a line segment.
-impl<RHS: Intersects<Ray>> Intersects<RHS> for Segment {
-    fn intersection(&self, rhs: &RHS) -> Option<Intersection> {
-        if let Some(inter) = rhs.intersection(&Ray::from(*self)) {
-            if inter.t <= 1.0 {
-                return Some(inter);
-            }
-        }
-        None
-    }
-}
-
-impl Intersects<Ray> for Triangle {
-    fn intersection(&self, r: &Ray) -> Option<Intersection> {
-        let p = Plane::from(
-            (
-                Point3::from_vec(self.a),
-                Point3::from_vec(self.b),
-                Point3::from_vec(self.c),
-            )
-        );
-        if let Some(inter) = p.intersection(r) {
-            if self.contains(&inter.p) {
-                return Some(inter)
-            }
-        }
-        None
-    }
-}
-
-impl Intersects<Ray> for  Rectangle {
-    fn intersection(&self, r: &Ray) -> Option<Intersection> {
-        let n = self.u[1].cross(self.u[0]);
-        let d = n.dot(self.c.to_vec());
-        let p = Plane { n: n, d: d };
-        if let Some(inter) = p.intersection(r) {
-            let d = inter.p - self.c;
-            let dist1 = d.dot(self.u[0]);
-            if dist1 > self.e[0] || dist1 < -self.e[0] {
-                return None;
-            }
-            let dist2 = d.dot(self.u[1]);
-            if dist2 > self.e[1] || dist2 < -self.e[1] {
-                return None;
-            }
-            return Some(inter);
-        }
-        None
-    }
-}
-
-commute_intersection!{ AABB, Ray }
-commute_intersection!{ AABB, Segment }
-commute_intersection!{ Sphere, Ray  }
-commute_intersection!{ Sphere, Segment }
-commute_intersection!{ Capsule, Ray }
-commute_intersection!{ Capsule, Segment }
-commute_intersection!{ Moving<Sphere>, Ray }
-commute_intersection!{ Moving<Sphere>, Segment }
 
 /// A point of contact between two objects occuring during a timestep.
 ///
@@ -518,11 +546,11 @@ impl<Poly: Polygon> Contacts<Moving<Sphere>> for Poly {
     fn contacts<F: FnMut(Contact)>(&self, sphere: &Moving<Sphere>, mut callback: F) -> bool {
         let &Moving(s, v) = sphere;
         let mut collision = false;
-        let p: Plane = self.face().clone().into();
+        let p: Plane = (*self).into();
         p.contacts(sphere, |contact: Contact| {
             // If the point lies on the face we know automatically that it is
             // a valid collision.
-            if self.face().contains(&contact.a) {
+            if self.contains(&contact.a) {
                 collision = true;
                 callback(contact);
                 return;
@@ -539,7 +567,7 @@ impl<Poly: Polygon> Contacts<Moving<Sphere>> for Poly {
                 p: s.c,
                 d: v,
             };
-            for edge_i in 0..self.num_edges() {
+            for edge_i in 0..Poly::NUM_VERTICES{
                 let (a, b) = self.edge(edge_i);
                 let v1 = self.vertex(a);
                 let v2 = self.vertex(b);
@@ -600,7 +628,7 @@ fn seg_2d_intersect(
 impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
     fn contacts<F: FnMut(Contact)>(&self, capsule: &Moving<Capsule>, mut callback: F) -> bool {
         let &Moving(c, v) = capsule;
-        let p: Plane = self.face().clone().into();
+        let p: Plane = (*self).into();
         // Check if the capsule is already colliding.
         let denom = p.n.dot(c.d.normalize());
         if denom.abs() > COLLISION_EPSILON {
@@ -608,7 +636,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
             if t <= 1.0 && t >= 0.0 {
                 // Already colliding the plane
                 let q = c.a + c.d * t;
-                if self.face().contains(&q) {
+                if self.contains(&q) {
                     // Already colliding with triangle
                     callback(Contact {
                         a: q,
@@ -686,7 +714,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
             );
             
             // Find the first possible contact
-            if self.face().contains(&contact.a) {
+            if self.contains(&contact.a) {
                 // If the triangle contains the contact we know it is a 
                 // valid contact.
                 callback(contact);
@@ -699,7 +727,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
 
                 // Find the second contact point on the capsule
                 let mut t_max = 0.0;
-                for edge_i in 0..self.num_edges() {
+                for edge_i in 0..Poly::NUM_VERTICES {
                     let (a, b) = self.edge(edge_i);
                     let edge_a = plane_rot
                         .rotate_vector(self.vertex(a).to_vec() -p.n * p.d)
@@ -738,7 +766,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
                 // intersects the silhouette of the triangle.
                 let (mut t_min, mut t_max): (f32, f32) = (f32::INFINITY, 0.0);
                 let mut found = false;
-                for edge_i in 0..self.num_edges() { //edge_base_i..edge_end {
+                for edge_i in 0..Poly::NUM_VERTICES {
                     let (a, b) = self.edge(edge_i);
                     let edge_a = plane_rot
                         .rotate_vector(self.vertex(a).to_vec() - p.n * p.d)
@@ -787,10 +815,11 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
         // edges. In order to subvert that as much as possilbe we're using
         // a pool Block64 as a bitset.
         // Thus, any face that wishes to compute here may only have 64
-        // vertices (for now).
+        // vertices (for now). Hopefully this will change when generic constants
+        // are added.
         // Honestly, that is a rather reasonable requirement. I'm certainly
         // never going to use more than four.
-        if self.num_vertices() > 64 {
+        if Poly::NUM_VERTICES > 64 {
             return false;
         }
         let mut parallel_edge_vert: u64 = 0;
@@ -802,7 +831,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
             Point3::new(0.0,0.0,0.0)
         );
         //        let mut second_contact: Option<Contact> = None;
-        for edge_i in 0..self.num_edges() { //edge_base_i..edge_end {
+        for edge_i in 0..Poly::NUM_VERTICES {
             let (a, b) = self.edge(edge_i);
             let edge_a = self.vertex(a);
             let edge_b = self.vertex(b);
@@ -871,7 +900,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
             Point3::new(0.0,0.0,0.0),
         );
 
-        for edge_i in 0..self.num_edges() { 
+        for edge_i in 0..Poly::NUM_VERTICES {
             let (a, b) = self.edge(edge_i);
 
             // If this edge is parallel, skip it.
