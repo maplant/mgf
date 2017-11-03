@@ -1,6 +1,6 @@
 [package]
 name = "mgf"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["Matthew Plant <maplant95@gmail.com>"]
 license = "LGPL-3.0"
 description = "A 3D collision and physics framework for video games."

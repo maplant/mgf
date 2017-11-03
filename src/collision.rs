@@ -380,6 +380,7 @@ pub struct Contact {
     pub t: f32,
 }
 
+/*
 impl Contact {
     /// Computes an orthonormal basis for the contact. This is usually used to
     /// produce tangent vectors for friction contacts.
@@ -393,6 +394,7 @@ impl Contact {
         [b, self.n.cross(b)]
     }
 }
+*/
 
 impl Neg for Contact {
     type Output = Contact;
@@ -1311,7 +1313,6 @@ pub struct LocalContact {
     /// Contact the LocalContact was derived from.
     pub global: Contact,
 }
-
 
 impl Neg for LocalContact {
     type Output = LocalContact;

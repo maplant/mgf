@@ -16,7 +16,7 @@ The library provides various features such as:
 - discrete collision detection: `Overlaps`, `Contains`
 - continuous collision detection: `Intersection`, `Contact`, `LocalContact`
 - a bounding volume hierarchy: `BVH`
-- rigid body physics: `RigidBody`, `StaticBody`
+- rigid body physics: `SimpleDynamicBody`, `CompoundDynamicBody`, `StaticBody`
 - dynamic containers: `Pool`
 
 MGF is very much in its infancy and is therefore not feature complete. If you

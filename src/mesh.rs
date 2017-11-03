@@ -104,7 +104,15 @@ where
             let b = self.verts[b].p + self.disp;
             let c = self.verts[c].p + self.disp;
             let tri = Triangle::from((a, b, c));
-            rhs.contacts(&tri, |c| { collided = true; callback(-c) });
+            rhs.contacts(&tri, |c| {
+                collided = true;
+                callback(Contact {
+                    a: c.b,
+                    b: c.a,
+                    t: c.t,
+                    n: -c.n,
+                });
+            });
         });
         collided
     }

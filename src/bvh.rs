@@ -26,9 +26,10 @@ use collision::{Intersects, Intersection};
 /// A Bounding Volume Hierarchy.
 pub struct BVH<B: Bound, V> {
     root: usize,
-    num_leaves: usize,
     pool: Pool<BVHNode<B, V>>,
 }
+
+
 
 struct BVHNode<B: Bound, V> {
     height: i32,
@@ -51,7 +52,6 @@ where
     fn clone(&self) -> Self {
         BVH {
             root: self.root,
-            num_leaves: self.num_leaves,
             pool: self.pool.clone(),
         }
     }
@@ -86,7 +86,6 @@ impl<B: Bound, V> BVH<B, V> {
     pub fn new() -> Self {
         BVH {
             root: 0,
-            num_leaves: 0,
             pool: Pool::new(),
         }
     }
@@ -95,7 +94,6 @@ impl<B: Bound, V> BVH<B, V> {
     pub fn with_capacity(cap: usize) -> Self {
         BVH {
             root: 0,
-            num_leaves: 0,
             pool: Pool::with_capacity(cap),
         }
     }
@@ -105,10 +103,6 @@ impl<B: Bound, V> BVH<B, V> {
         self.pool.empty()
     }
 
-    /// Returns the number of bounds inserted into the BVH.
-    pub fn len(&self) -> usize {
-        self.num_leaves
-    }
 
     fn insert_node(&mut self, bounds: B, node_type: BVHNodeType<V>) -> usize {
         self.pool.push(BVHNode {
@@ -122,7 +116,6 @@ impl<B: Bound, V> BVH<B, V> {
     /// Inserts an item into the BVH, rebalancing if necessary. All IDs returned
     /// prior to insert remain valid afterward.
     pub fn insert<K: BoundedBy<B>>(&mut self, key: &K, val: V) -> usize {
-        self.num_leaves += 1;
         let bounds = key.bounds();
         let leaf = self.insert_node(bounds, BVHNodeType::Leaf(val));
         if self.pool.len() == 1 {
@@ -218,9 +211,12 @@ impl<B: Bound, V> BVH<B, V> {
 
     /// Removes a leaf node from the BVH.
     pub fn remove(&mut self, leaf: usize) {
-        self.num_leaves -= 1;
         let parent = self.pool[leaf].parent;
         self.pool.remove(leaf);
+        if leaf == self.root {
+            self.root = 0;
+            return;
+        }
         if let BVHNodeType::Parent(child1, child2) = self.pool[parent].node_type {
             let sibling = if child1 == leaf { child2 } else { child1 };
             if self.root != parent {
@@ -274,8 +270,7 @@ impl<B: Bound, V> BVH<B, V> {
         Arg: BoundedBy<B>,
         F: FnMut(&V)
     {
-        let len = self.len();
-        if len < 1 {
+        if self.empty() {
             return;
         }
         let arg_bounds = arg.bounds();
@@ -309,8 +304,7 @@ impl<B: Bound, V> BVH<B, V> {
         Arg: BoundedBy<B>,
         F: FnMut(&mut V)
     {
-        let len = self.len();
-        if len < 1 {
+        if self.empty() {
             return;
         }
         let arg_bounds = arg.bounds();
@@ -338,8 +332,7 @@ impl<B: Bound, V> BVH<B, V> {
         Arg: Intersects<B>,
         F: FnMut(&V, Intersection)
     {
-        let len = self.len();
-        if len < 1 {
+        if self.empty() {
             return;
         }
         let mut stack = SmallVec::<[usize; 64]>::new();

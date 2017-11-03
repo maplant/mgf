@@ -100,6 +100,14 @@ impl<T> Pool<T> {
         }
     }
 
+    /// Returns the next available id for reuse if one exists.
+    pub fn next_free(&self) -> Option<usize> {
+        if let Some(free) = self.free_list {
+            Some(free)
+        } else {
+            None
+        }
+    }
     
     pub fn iter<'a>(&'a self) -> FilterMap<slice::Iter<'a, PoolEntry<T>>, fn(&PoolEntry<T>) -> Option<&T>> {
         self.into_iter()

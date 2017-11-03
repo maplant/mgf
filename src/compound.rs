@@ -15,7 +15,9 @@
 
 use std::vec::Vec;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
-use cgmath::{EuclideanSpace, Rotation, Vector3, Point3, Quaternion, One, Zero};
+use cgmath::{EuclideanSpace, Rotation, Rotation3, Vector3, Point3, Quaternion, One, Zero};
+
+use smallvec::SmallVec;
 
 use bvh::*;
 use bounds::*;
@@ -32,12 +34,11 @@ pub enum Component {
     // More shapes to come...
 }
 
-impl Component {
-    /// Rotates the component around the origin.
-    pub fn rotate(self, r: Quaternion<f32>) -> Self {
+impl Volumetric for Component {
+    fn rotate<R: Rotation3<f32>>(&self, r: R) -> Self {
         match self {
-            Component::Sphere(s) => Component::Sphere(s.rotate(r)),
-            Component::Capsule(c) => Component::Capsule(c.rotate(r)),
+            &Component::Sphere(ref s) => Component::Sphere(s.rotate(r)),
+            &Component::Capsule(ref c) => Component::Capsule(c.rotate(r)),
         }
     }
 }
@@ -173,7 +174,7 @@ pub struct Compound {
     pub rot: Quaternion<f32>,
     /// Indices of the geometries composing the compound in the BVH.
     /// One-to-one with the constructing vector.
-    pub shapes: Vec<usize>,
+    pub shapes: SmallVec<[usize; 1]>,
     /// BVH storing the components to improve collision efficiency.
     pub bvh: BVH<AABB, Component>,
 }
@@ -181,7 +182,7 @@ pub struct Compound {
 impl Compound {
     pub fn new(components: Vec<Component>) -> Self {
         let mut bvh: BVH<AABB, Component> = BVH::new();
-        let mut shapes: Vec<usize> = Vec::with_capacity(components.len());
+        let mut shapes: SmallVec<[usize; 1]> = SmallVec::with_capacity(components.len());
         for component in components.iter() {
             shapes.push(bvh.insert(component, *component));
         }
@@ -267,7 +268,7 @@ where
         rhs_bounds.set_pos(bounds_disp);
         let mut collided = false;
         self.bvh.query(&rhs_bounds, |&comp| {
-            let shape = comp.rotate(self.rot) + self.disp;
+            let shape = comp.rotate_about(self.rot, Point3::new(0.0, 0.0, 0.0)) + self.disp;
             rhs.contacts(&shape, |c| { collided = true; callback(-c) });
         });
         collided

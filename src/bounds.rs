@@ -14,7 +14,7 @@
 // along with MGF. If not, see <http://www.gnu.org/licenses/>.
 
 use std::ops::{Add, Sub, Mul, Div};
-use cgmath::{EuclideanSpace, InnerSpace, Point3, Quaternion, Rotation, Vector3, Zero};
+use cgmath::{EuclideanSpace, InnerSpace, Point3, Vector3, Zero};
 
 use geom::*;
 use collision::*;
@@ -33,15 +33,12 @@ pub trait Bound
     + Div<f32, Output = Self>           // Scalar divide
     + Add<f32, Output = Self>           // Scalar extend
     + Sub<f32, Output = Self>           // Scalar shrink
-    + Shape
+    + Volumetric
     + Overlaps<Self>
     + Contains<Self>
 {
     /// Produce a bound that encloses the two arguments.
     fn combine(&Self, &Self) -> Self;
-
-    /// Rotate the bound in place. This is useless for spheres.
-    fn rotate(&self, Quaternion<f32>) -> Self;
 
     /// Return a measure of the area of the object.
     fn surface_area(&self) -> f32;
@@ -123,56 +120,6 @@ impl Bound for AABB {
             (a.c.x + a.r.x).max(b.c.x + b.r.x),
             (a.c.y + a.r.y).max(b.c.y + b.r.y),
             (a.c.z + a.r.z).max(b.c.z + b.r.z),
-        );
-        let r = (upper - lower) / 2.0;
-        assert!(r.x > 0.0);
-        assert!(r.y > 0.0);
-        assert!(r.z > 0.0);
-        let c = Point3::from_vec((upper + lower) / 2.0);
-        AABB { c, r }
-    }
-
-    /// Rotate the AABB
-    fn rotate(&self, q: Quaternion<f32>) -> AABB {
-        let r = self.r;
-        let vx = q.rotate_vector(Vector3::new(r.x, 0.0, 0.0));
-        let vy = q.rotate_vector(Vector3::new(0.0, r.y, 0.0));
-        let vz = q.rotate_vector(Vector3::new(0.0, 0.0, r.z));
-        let p1 = self.c + (vx + vy + vz);
-        let p2 = self.c + (vx + vy - vz);
-        let p3 = self.c + (vx - vy + vz);
-        let p4 = self.c + (vx - vy - vz);
-        let p5 = self.c + (-vx + vy + vz);
-        let p6 = self.c + (-vx + vy - vz);
-        let p7 = self.c + (-vx - vy + vz);
-        let p8 = self.c + (-vx - vy - vz);
-        let lower = Vector3::new(
-            p1.x.min(
-                p2.x
-                    .min(p3.x.min(p4.x.min(p5.x.min(p6.x.min(p7.x.min(p8.x)))))),
-            ),
-            p1.y.min(
-                p2.y
-                    .min(p3.y.min(p4.y.min(p5.y.min(p6.y.min(p7.y.min(p8.y)))))),
-            ),
-            p1.z.min(
-                p2.z
-                    .min(p3.z.min(p4.z.min(p5.z.min(p6.z.min(p7.z.min(p8.z)))))),
-            ),
-        );
-        let upper = Vector3::new(
-            p1.x.max(
-                p2.x
-                    .max(p3.x.max(p4.x.max(p5.x.max(p6.x.max(p7.x.max(p8.x)))))),
-            ),
-            p1.y.max(
-                p2.y
-                    .max(p3.y.max(p4.y.max(p5.y.max(p6.y.max(p7.y.max(p8.y)))))),
-            ),
-            p1.z.max(
-                p2.z
-                    .max(p3.z.max(p4.z.max(p5.z.max(p6.z.max(p7.z.max(p8.z)))))),
-            ),
         );
         let r = (upper - lower) / 2.0;
         assert!(r.x >= 0.0);
@@ -300,11 +247,7 @@ impl Bound for Sphere {
         }
     }
 
-    /// Rotation to a bounding sphere does nothing.
-    fn rotate(&self, _: Quaternion<f32>) -> Sphere {
-        *self
-    }
-
+    #[inline(always)]
     fn surface_area(&self) -> f32 {
         self.r * self.r
     }

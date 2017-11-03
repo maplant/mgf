@@ -22,9 +22,8 @@ use bounds::*;
 use compound::*;
 use collision::*;
 use geom::*;
-use manifold::*;
 
-/// An type that has a moment of inertia.
+/// An type that has a moment of inertia tensor.
 pub trait Inertia {
     fn tensor(&self, m: f32) -> Matrix3<f32>;
 }
@@ -75,10 +74,10 @@ impl Inertia for Component {
 /// A generic physical body that has a mass, a volume, and experiences linear and
 /// rotational movement.
 ///
-/// A RigidBody is technically a shape, although its geomtries are all considered
+/// A CompoundDynamicBody is technically a shape, although its geometries are all considered
 /// to be in motion.
 #[derive(Clone)]
-pub struct RigidBody {
+pub struct CompoundDynamicBody {
     pub restitution: f32,
     pub friction: f32,
     pub total_inv_mass: f32,
@@ -87,8 +86,6 @@ pub struct RigidBody {
     pub v: Vector3<f32>,
     pub omega: Vector3<f32>,
     pub v_step: Vector3<f32>,
-    pub linear_m: Vector3<f32>,
-    pub angular_m: Vector3<f32>,
     pub force: Vector3<f32>,
     pub torque: Vector3<f32>,
     // Position and rotation are stored in collider.
@@ -96,8 +93,8 @@ pub struct RigidBody {
     pub component_masses: Vec<f32>,
 }
 
-impl RigidBody {
-    /// Construct a new RigidBody from a Vec of Components and masses.
+impl CompoundDynamicBody {
+    /// Construct a new CompoundDynamicBody from a Vec of Components and masses.
     pub fn new(
         restitution: f32,
         friction: f32,
@@ -105,7 +102,7 @@ impl RigidBody {
         mut shapes: Vec<Component>,
         masses: Vec<f32>
     ) -> Self {
-        // Calculate the center of mass of the RigidBody.
+        // Calculate the center of mass of the CompoundDynamicBody.
         let mut total_mass = 0.0;
         let mut center = Point3::new(0.0, 0.0, 0.0);
         for (shape, mass) in shapes.iter().zip(masses.iter()) {
@@ -131,7 +128,7 @@ impl RigidBody {
                     + *mass * (Matrix3::one() * disp.magnitude2() - outer_prod)
             });
         let inv_moment = tensor.invert().unwrap();
-        RigidBody {
+        CompoundDynamicBody {
             restitution,
             friction,
             total_inv_mass: inv_mass,
@@ -140,8 +137,6 @@ impl RigidBody {
             v: Vector3::zero(),
             omega: Vector3::zero(),
             v_step: Vector3::zero(),
-            linear_m: Vector3::zero(),
-            angular_m: Vector3::zero(),
             force: world_force / inv_mass,
             torque: Vector3::zero(),
             collider: Compound::new(shapes),
@@ -150,33 +145,33 @@ impl RigidBody {
     }
 }    
 
-impl AddAssign<Vector3<f32>> for RigidBody {
+impl AddAssign<Vector3<f32>> for CompoundDynamicBody {
     fn add_assign(&mut self, v: Vector3<f32>) {
         self.collider.disp += v
     }
 }
 
-impl SubAssign<Vector3<f32>> for RigidBody {
+impl SubAssign<Vector3<f32>> for CompoundDynamicBody {
     fn sub_assign(&mut self, v: Vector3<f32>) {
         self.collider.disp -= v
     }
 }
 
-impl Shape for RigidBody {
-    /// The center returned by a RigidBody is the center of mass for that
+impl Shape for CompoundDynamicBody {
+    /// The center returned by a CompoundDynamicBody is the center of mass for that
     /// object. 
     fn center(&self) -> Point3<f32> {
         Point3::from_vec(self.collider.disp)
     }
 }
 
-impl Delta for RigidBody {
+impl Delta for CompoundDynamicBody {
     fn delta(&self) -> Vector3<f32> {
         self.v_step
     }
 }
 
-impl BoundedBy<AABB> for RigidBody {
+impl BoundedBy<AABB> for CompoundDynamicBody {
     fn bounds(&self) -> AABB {
         let b1 = self.collider.bounds();
         let b2 = b1 + self.v_step;
@@ -184,7 +179,7 @@ impl BoundedBy<AABB> for RigidBody {
     }
 }
 
-impl BoundedBy<Sphere> for RigidBody {
+impl BoundedBy<Sphere> for CompoundDynamicBody {
     fn bounds(&self) -> Sphere {
         let b1 = self.collider.bounds();
         let b2 = b1 + self.v_step;
@@ -192,7 +187,7 @@ impl BoundedBy<Sphere> for RigidBody {
     }
 }
 
-impl<RHS> Contacts<RHS> for RigidBody
+impl<RHS> Contacts<RHS> for CompoundDynamicBody
 where
     RHS: Contacts<Moving<Component>> + BoundedBy<AABB>
 {
@@ -206,12 +201,120 @@ where
         let mut collided = false;
         self.collider.bvh.query(&rhs_bounds, |&comp| {
             let shape = Moving::sweep(
-                comp.rotate(self.collider.rot) + self.collider.disp,
+                comp.rotate_about(self.collider.rot,
+                                  Point3::new(0.0, 0.0, 0.0)) + self.collider.disp,
                 self.v_step
             );
             rhs.contacts(&shape, |c| { collided = true; callback(-c) });
         });
         collided
+    }
+}
+
+/// A dynamic body based on a single component.
+#[derive(Clone)]
+pub struct SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy
+{
+    pub restitution: f32,
+    pub friction: f32,
+    pub inv_mass: f32,
+    pub inv_moment_body: Matrix3<f32>,
+    pub inv_moment: Matrix3<f32>,
+    pub v: Vector3<f32>,
+    pub omega: Vector3<f32>,
+    pub q: Quaternion<f32>,
+    pub force: Vector3<f32>,
+    pub torque: Vector3<f32>,
+    pub collider: Moving<S>,
+}
+
+
+impl<S> SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy
+{
+    /// Construct a new SimpleDynamicBody.
+    pub fn new(
+        restitution: f32,
+        friction: f32,
+        world_force: Vector3<f32>,
+        shape: S,
+        mass: f32
+    ) -> Self {
+        let inv_mass = 1.0 / mass;
+        let inv_moment = shape.tensor(mass).invert().unwrap();
+        SimpleDynamicBody {
+            restitution,
+            friction,
+            inv_mass,
+            inv_moment_body: inv_moment,
+            inv_moment,
+            v: Vector3::zero(),
+            omega: Vector3::zero(),
+            q: Quaternion::one(),
+            force: world_force / inv_mass,
+            torque: Vector3::zero(),
+            collider: Moving::sweep(shape, Vector3::zero()),
+        }
+    }
+}    
+
+impl<S> AddAssign<Vector3<f32>> for SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy
+{
+    fn add_assign(&mut self, v: Vector3<f32>) {
+        *self.collider.as_mut() += v
+    }
+}
+
+impl<S> SubAssign<Vector3<f32>> for SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy
+{
+    fn sub_assign(&mut self, v: Vector3<f32>) {
+        *self.collider.as_mut() -= v
+    }
+}
+
+impl<S> Shape for SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy
+{
+    fn center(&self) -> Point3<f32> {
+        self.collider.as_ref().center()
+    }
+}
+
+
+impl<S> Delta for SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy
+{
+    fn delta(&self) -> Vector3<f32> {
+        self.collider.delta()
+    }
+}
+
+impl<S, B> BoundedBy<B> for SimpleDynamicBody<S>
+where
+    S: BoundedBy<B> + Volumetric + Inertia + Copy,
+    B: Bound
+{
+    fn bounds(&self) -> B {
+        self.collider.bounds()
+    }
+}
+
+impl<S, RHS> Contacts<RHS> for SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy, 
+    RHS: Contacts<Moving<S>>
+{
+    fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, mut callback: F) -> bool {
+        rhs.contacts(&self.collider, |c|callback(-c))
     }
 }
 
@@ -276,59 +379,44 @@ where
             let a_c = self.center() + self.delta() * c.t;
             let b_c = rhs.shape.center();
             callback(LocalContact {
-                local_b: c.a + -a_c.to_vec(),
-                local_a: c.b + -b_c.to_vec(),
+                local_a: c.a + -a_c.to_vec(),
+                local_b: c.b + -b_c.to_vec(),
                 global: c
             })
         })
     }
 }
 
-/// A description of the physical state of an object.
+
+/// A description of the positional derivative of an object.
 #[derive(Copy, Clone)]
-pub struct PhysicsState {
-    /// Restitution is a measure of how much kinetic energy is retained in a
-    /// collision. 100% of kinetic energy retention corresponds to a coefficient
-    /// of one.
-    pub restitution: f32,
-    /// We simplify friction in this case to simply be a ratio of the normal force
-    /// applied tangentially to an object during collision.
-    pub friction: f32,
-    /// We only ever need inverse mass for calcuations, plus it gives a neat
-    /// advantage that we can represent immovable objects with an infinite mass,
-    /// or an inverse mass of zero.
-    pub inv_mass: f32,
-    /// The inverse moment of inertia tensor of the object correctly oriented.
-    pub inv_moment: Matrix3<f32>,
-    /// The position of the object at the end of the timestep.
-    pub x: Point3<f32>,
-    /// The linear velocity of the object
-    pub v: Vector3<f32>,
-    /// The angular velocity of the object
-    pub omega: Vector3<f32>,
+pub struct Velocity {
+    pub linear: Vector3<f32>,
+    pub angular: Vector3<f32>,
 }
 
 /// A type that exhibits physical properties.
-///
-/// A PhysicsObject's primary function is to return a PhysicsState to be used
-/// during collision resolution. Beyond that it has various methods to be updated
-/// or choose to ignore such updates (for example, calling `apply_impulse` on a
-/// StaticBody is a no-op).
 pub trait PhysicsObject {
-    /// Integrate the object over the timestep
+    /// Integrate the object over the time step.
     fn integrate(&mut self, dt: f32);
 
-    /// Return the physics state of the object
-    fn state(&self) -> PhysicsState;
+    fn get_dx(&self) -> Velocity;
 
-    /// Apply linear and angular impulse to the object
-    fn apply_impulse(&mut self, linear: Vector3<f32>, angular: Vector3<f32>);
+    fn set_dx(&mut self, v: Velocity);
 
-    /// Update the linear and angular positional derivatives
-    fn update_dx(&mut self);
+    /// Return the position of the object at the end of the time step.
+    fn pos(&self) -> Point3<f32>;
+
+    fn inv_mass(&self) -> f32;
+
+    fn inv_moment(&self) -> Matrix3<f32>;
+
+    fn restitution(&self) -> f32;
+
+    fn friction(&self) -> f32;
 }
 
-impl PhysicsObject for RigidBody {
+impl PhysicsObject for CompoundDynamicBody {
     fn integrate(&mut self, dt: f32) {
         self.collider += self.v_step;
         self.collider.rot = (self.collider.rot
@@ -336,393 +424,129 @@ impl PhysicsObject for RigidBody {
                              * 0.5 * self.collider.rot).normalize();
         let r = Matrix3::from(self.collider.rot);
         self.inv_moment = r * self.inv_moment_body * r.transpose();
-        self.linear_m += self.force * dt;
-        self.angular_m += self.torque * dt;
-        self.update_dx();
+        self.v += self.force * self.total_inv_mass * dt;
+        self.omega += self.inv_moment * self.torque * dt;
         self.v_step = self.v * dt;
+
+        self.v *= 1.0 / (1.0 + dt * 0.00001);
+        self.omega *= 1.0 / (1.0 + dt * 0.1);
     }
 
-    fn state(&self) -> PhysicsState {
-        PhysicsState {
-            restitution: self.restitution,
-            friction: self.friction,
-            inv_mass: self.total_inv_mass,
-            inv_moment: self.inv_moment,
-            x: self.collider.center() + self.v_step,
-            v: self.v,
-            omega: self.omega,
+    fn get_dx(&self) -> Velocity {
+        Velocity {
+            linear: self.v,
+            angular: self.omega
         }
     }
 
-    fn apply_impulse(&mut self, linear: Vector3<f32>, angular: Vector3<f32>) {
-        self.linear_m += linear;
-        self.angular_m += angular;
+    fn set_dx(&mut self, v: Velocity) {
+        self.v = v.linear;
+        self.omega = v.angular;
     }
 
-    fn update_dx(&mut self) {
-        self.v = self.linear_m * self.total_inv_mass;
-        self.omega = self.inv_moment * self.angular_m;
+    fn pos(&self) -> Point3<f32> {
+        self.collider.center() + self.v_step
+    }
+
+    fn inv_mass(&self) -> f32 {
+        self.total_inv_mass
+    }
+
+    fn inv_moment(&self) -> Matrix3<f32> {
+        self.inv_moment
+    }
+
+    fn restitution(&self) -> f32 {
+        self.restitution
+    }
+
+    fn friction(&self) -> f32 {
+        self.friction
+    }
+}
+
+impl<S> PhysicsObject for SimpleDynamicBody<S>
+where
+    S: Volumetric + Inertia + Copy
+{
+    fn integrate(&mut self, dt: f32) {
+        *self.collider.as_mut() += self.collider.1;
+        self.q = (self.q
+                  + Quaternion::from_sv(0.0, self.omega)
+                  * 0.5 * self.q).normalize();
+        let r = Matrix3::from(self.q);
+        self.inv_moment = r * self.inv_moment_body * r.transpose();
+        self.v += self.inv_mass * self.force * dt;
+        self.omega += self.inv_moment * self.torque * dt;
+        self.collider.1 = self.v * dt;
+
+        self.v *= 1.0 / (1.0 + dt * 0.00001);
+        self.omega *= 1.0 / (1.0 + dt * 0.1);
+    }
+
+    fn get_dx(&self) -> Velocity {
+        Velocity {
+            linear: self.v,
+            angular: self.omega
+        }
+    }
+
+    fn set_dx(&mut self, v: Velocity) {
+        self.v = v.linear;
+        self.omega = v.angular;
+    }
+
+    fn pos(&self) -> Point3<f32> {
+        self.collider.as_ref().center() + self.collider.1
+    }
+
+    fn inv_mass(&self) -> f32 {
+        self.inv_mass
+    }
+
+    fn inv_moment(&self) -> Matrix3<f32> {
+        self.inv_moment
+    }
+
+    fn restitution(&self) -> f32 {
+        self.restitution
+    }
+
+    fn friction(&self) -> f32 {
+        self.friction
     }
 }
 
 impl<'a, S: Shape + 'a> PhysicsObject for StaticBody<'a, S> {
     #[inline(always)]
-    fn integrate(&mut self, _dt: f32) {
-        // Do nothing
-    }
+    fn integrate(&mut self, _dt: f32) {}
 
-    fn state(&self) -> PhysicsState {
-        PhysicsState {
-            restitution: 0.0,
-            friction: self.friction,
-            inv_mass: 0.0,  // Infinite mass
-            inv_moment: Matrix3::zero(),
-            x: self.shape.center(),
-            v: Vector3::zero(),
-            omega: Vector3::zero(),
-        }
-    }
-    
     #[inline(always)]
-    fn apply_impulse(&mut self, _linear: Vector3<f32>, _angular: Vector3<f32>) {
-        // Do nothing
+    fn get_dx(&self) -> Velocity {
+        Velocity {
+            linear: Vector3::zero(),
+            angular: Vector3::zero(),
+        }
     }
 
     #[inline(always)]
-    fn update_dx(&mut self) {
-        // Do nothing
-    }
-}
+    fn set_dx(&mut self, _v: Velocity) {}
 
-/// A set of constants necessary when performing collision resolution.
-pub trait PhysicsConfig {
-    const PENETRATION_SLOP: f32;
-    const BAUMGARTE: f32; 
-}
+    fn pos(&self) -> Point3<f32> { self.shape.center() }
 
-/// The suggested set of parameters to use when resolving collisions.
-pub struct DefaultPhysConfig {}
-
-impl PhysicsConfig for DefaultPhysConfig {
-    const PENETRATION_SLOP: f32 = 0.005;
-    const BAUMGARTE: f32 = 0.2;
-}
-
-impl PhysicsState {
-    /// Perform collision resolution on two physics states from a contact and a
-    /// timestep.
-    pub fn resolve_contact<Config, ObjA, ObjB>(
-        obj_a: &mut ObjA,
-        obj_b: &mut ObjB,
-        contact: &LocalContact,
-        dt: f32
-    ) where Config: PhysicsConfig,
-            ObjA: PhysicsObject,
-            ObjB: PhysicsObject
-    {
-        let (state_a, state_b) = (obj_a.state(), obj_b.state());
-        let (xa, va, oa) = (state_a.x, state_a.v, state_a.omega);
-        let (xb, vb, ob) = (state_b.x, state_b.v, state_b.omega);
-        let ca = contact.local_a.to_vec() + xa.to_vec();
-        let cb = contact.local_b.to_vec() + xb.to_vec();
-        let ra = ca - xa.to_vec();
-        let rb = cb - xb.to_vec();
-        let ra_cn = ra.cross(contact.global.n);
-        let rb_cn = rb.cross(contact.global.n);
-
-        // Penetration is defined as the distance between the two contact points
-        // dotted with the normal vector.
-        let pen = (cb - ca).dot(contact.global.n);
-
-        // The value of restitutiuon we want to use is the maximum of the two
-        // object's restitution.
-        let max_restitution = state_a.restitution.max(state_b.restitution);
-
-        let dv = vb + ob.cross(rb) - va - oa.cross(ra);
-        let rel_v = dv.dot(contact.global.n);
-
-        let bias = Config::BAUMGARTE / dt * if pen > 0.0 {
-            0.0
-        } else {
-            -pen + Config::PENETRATION_SLOP
-        } + if rel_v < -1.0 {
-            -max_restitution * rel_v
-        } else {
-            0.0
-        };
-
-        let normal_mass = 1.0 /
-            (state_a.inv_mass + ra_cn.dot(state_a.inv_moment * ra_cn)
-             + state_b.inv_mass + rb_cn.dot(state_b.inv_moment * rb_cn));
-
-        // Calculate and clamp impulse due to collision resolution
-        let lambda = (normal_mass * (-rel_v + bias)).max(0.0);
-        let impulse = contact.global.n * lambda;
-
-        // Apply impulse
-        obj_a.apply_impulse(-impulse, -state_a.inv_moment * ra.cross(impulse));
-        obj_b.apply_impulse( impulse,  state_b.inv_moment * rb.cross(impulse));
-
-        // Reduce the normal impulse by some constant and calculate friction.
-        let normal_impulse = lambda / 5.0;
-        let mix_friction = (state_a.friction * state_b.friction).sqrt();
-        let tangents = contact.global.compute_basis();
-        let mut impulse = Vector3::zero();
-        for tangent in tangents.iter() {
-            let ra_ct = ra.cross(*tangent);
-            let rb_ct = rb.cross(*tangent);
-            let tangent_mass = 1.0 /
-                (state_a.inv_mass + ra_ct.dot(state_a.inv_moment * ra_ct)
-                 + state_b.inv_mass + rb_ct.dot(state_b.inv_moment * rb_ct));
-            let lambda = -dv.dot(*tangent) * tangent_mass;
-            let max_lambda = mix_friction * normal_impulse;
-            let clamped = lambda.max(-max_lambda).min(max_lambda);
-            impulse += clamped * tangent;
-        }
-
-        // Apply friction impulse
-        obj_a.apply_impulse(-impulse, -state_a.inv_moment * ra.cross(impulse));
-        obj_b.apply_impulse( impulse,  state_b.inv_moment * rb.cross(impulse));
+    fn inv_mass(&self) -> f32 {
+        0.0
     }
 
-    /// Perform collision resolution from a manifold.
-    /// This is the preferred method for resolving two bodies.
-    pub fn resolve_manifold<Config, ObjA, ObjB>(
-        obj_a: &mut ObjA,
-        obj_b: &mut ObjB,
-        manifold: &Manifold,
-        dt: f32
-    ) where Config: PhysicsConfig,
-            ObjA: PhysicsObject,
-            ObjB: PhysicsObject
-    {
-        for contact in &manifold.contacts {
-            PhysicsState::resolve_contact::<Config, ObjA, ObjB>(obj_a, obj_b, contact, dt);
-        }
-        obj_a.update_dx();
-        obj_b.update_dx();
+    fn inv_moment(&self) -> Matrix3<f32> {
+        Matrix3::zero()
     }
-}
 
-#[cfg(test)]
-mod tests {
-    mod physics {
-        use cgmath::{Vector3, Point3, One, Zero};
+    fn restitution(&self) -> f32 {
+        0.0
+    }
 
-        use geom::*;
-        use physics::*;
-
-        #[test]
-        fn test_rigid_body() {
-            let body_sample = RigidBody::new(1.0, 0.0, Vector3::zero(),
-                                             vec![ Component::from(Sphere{ c: Point3::new(-5.0, 0.0, 0.0),
-                                                                           r: 1.0 }),
-                                                   Component::from(Sphere{ c: Point3::new(5.0, 0.0, 0.0),
-                                                                           r: 1.0 }) ],
-                                             vec![ 1.0, 1.0 ]);
-            let mut body1 = body_sample.clone();
-            let mut body2 = body1.clone();
-
-            body1.set_pos(Point3::new(-10.0, 0.0, 0.0));
-            body1.apply_impulse(Vector3::new(5.0, 0.0, 0.0) * 2.0, Vector3::zero());
-            body1.integrate(1.0);
-            body2.set_pos(Point3::new(10.0, 0.0, 0.0));
-            body2.apply_impulse(Vector3::new(-5.0, 0.0, 0.0) * 2.0, Vector3::zero());
-            body2.integrate(1.0);
-
-            let mut manifold = Manifold::new();
-            assert!(body1.local_contacts(&body2, |c| {
-                manifold.push(c);
-            }));
-            
-            PhysicsState::resolve_manifold::<DefaultPhysConfig, _, _>(&mut body1, &mut body2, &manifold, 1.0);
-            assert_eq!(body1.v, Vector3::new(-5.2005005, 0.0, 0.0));
-            assert_eq!(body2.v, Vector3::new(5.2005005, 0.0, 0.0));
-            assert_eq!(body1.collider.rot, Quaternion::one());
-            assert_eq!(body2.collider.rot, Quaternion::one());
-
-            // Collisions with no penetration should produce no extra impulse besides slop:
-            let mut body1 = body_sample.clone();
-            let mut body2 = body_sample.clone();
-
-            body1.set_pos(Point3::new(-10.0, 0.0, 0.0));
-            body1.apply_impulse(Vector3::new(4.0, 0.0, 0.0) * 2.0, Vector3::zero());
-            body1.integrate(1.0);
-            body2.set_pos(Point3::new(10.0, 0.0, 0.0));
-            body2.apply_impulse(Vector3::new(-4.0, 0.0, 0.0) * 2.0, Vector3::zero());
-            body2.integrate(1.0);
-
-            let mut manifold = Manifold::new();
-            assert!(body1.local_contacts(&body2, |c| {
-                manifold.push(c);
-            }));
-            
-            PhysicsState::resolve_manifold::<DefaultPhysConfig, _, _>(&mut body1, &mut body2, &manifold, 1.0);
-            assert_eq!(body1.v, Vector3::new(-4.0004997, 0.0, 0.0));
-            assert_eq!(body2.v, Vector3::new(4.0004997, 0.0, 0.0));
-            assert_eq!(body1.collider.rot, Quaternion::one());
-            assert_eq!(body2.collider.rot, Quaternion::one());
-
-            // Collisions with no penetration should produce no extra impulse besides slop:
-            let mut body1 = body_sample.clone();
-            let mut body2 = body_sample.clone();
-
-            body1 += Vector3::new(0.0, 5.0, 0.0);
-            body1.apply_impulse(Vector3::new(0.0, -4.0, 0.0) * 2.0, Vector3::zero());
-            body1.integrate(1.0);
-            body2 -= Vector3::new(0.0, 5.0, 0.0);
-            body2.apply_impulse(Vector3::new(0.0, 4.0, 0.0) * 2.0, Vector3::zero());
-            body2.integrate(1.0);
-
-            let mut manifold = Manifold::new();
-            assert!(body1.local_contacts(&body2, |c| {
-                manifold.push(c);
-            }));
-
-            assert_eq!(manifold.contacts.len(), 2);
-            
-            PhysicsState::resolve_manifold::<DefaultPhysConfig, _, _>(&mut body1, &mut body2, &manifold, 1.0);
-            assert_eq!(body1.v, Vector3::new(0.0, 4.0639954, 0.0));
-            assert_eq!(body2.v, Vector3::new(0.0, -4.0639954, 0.0));
-            assert_eq!(body1.collider.rot, Quaternion::one());
-            assert_eq!(body2.collider.rot, Quaternion::one());
-
-            // Test against a capsule RigidBody
-            let capsule_sample = RigidBody::new(1.0, 0.0, Vector3::zero(),
-                                             vec![ Component::from(Capsule{ a: Point3::new(-5.0, 0.0, 0.0),
-                                                                            d: Vector3::new(10.0, 0.0, 0.0),
-                                                                            r: 1.0 }) ],
-                                             vec![ 2.0 ]);
-
-            let mut body1 = capsule_sample.clone();
-            let mut body2 = body_sample.clone();
-
-            body1 += Vector3::new(0.0, 5.0, 0.0);
-            body1.apply_impulse(Vector3::new(0.0, -4.0, 0.0) * 2.0, Vector3::zero());
-            body1.integrate(1.0);
-            body2 -= Vector3::new(0.0, 5.0, 0.0);
-            body2.apply_impulse(Vector3::new(0.0, 4.0, 0.0) * 2.0, Vector3::zero());
-            body2.integrate(1.0);
-
-            let mut manifold = Manifold::new();
-            assert!(body1.local_contacts(&body2, |c| {
-                manifold.push(c);
-            }));
-
-            assert_eq!(manifold.contacts.len(), 2);
-            
-            PhysicsState::resolve_manifold::<DefaultPhysConfig, _, _>(&mut body1, &mut body2, &manifold, 1.0);
-            assert_eq!(body1.v, Vector3::new(0.0, 2.0769472, 0.0));
-            assert_eq!(body2.v, Vector3::new(0.0, -2.0769472, 0.0));
-            assert_eq!(body1.collider.rot, Quaternion::one());
-            assert_eq!(body2.collider.rot, Quaternion::one());
-
-            // This collision should be exactly the same as the two spheres collision, except
-            // with only one contact point.
-            let mut body1 = capsule_sample.clone();
-            let mut body2 = capsule_sample.clone();
-
-            body1 += Vector3::new(0.0, 5.0, 0.0);
-            body1.apply_impulse(Vector3::new(0.0, -4.0, 0.0) * 2.0, Vector3::zero());
-            body1.integrate(1.0);
-            body2 -= Vector3::new(0.0, 5.0, 0.0);
-            body2.apply_impulse(Vector3::new(0.0, 4.0, 0.0) * 2.0, Vector3::zero());
-            body2.integrate(1.0);
-
-            let mut manifold = Manifold::new();
-            assert!(body1.local_contacts(&body2, |c| {
-                manifold.push(c);
-            }));
-
-            assert_eq!(manifold.contacts.len(), 1);
-            
-            PhysicsState::resolve_manifold::<DefaultPhysConfig, _, _>(&mut body1, &mut body2, &manifold, 1.0);
-            assert_eq!(body1.v, Vector3::new(0.0, 4.0004997, 0.0));
-            assert_eq!(body2.v, Vector3::new(0.0, -4.0004997, 0.0));
-            assert_eq!(body1.collider.rot, Quaternion::one());
-            assert_eq!(body2.collider.rot, Quaternion::one());
-
-            // Test a raft-like object composed of four capsules.
-            let raft = RigidBody::new(
-                1.0,
-                0.0,
-                Vector3::zero(),
-                vec![
-                    Component::from(Capsule{
-                        a: Point3::new(0.0, 0.0, 0.0),
-                        d: Vector3::new(2.0, 0.0, 0.0),
-                        r: 1.0,
-                    }),
-                    Component::from(Capsule{
-                        a: Point3::new(2.0, 0.0, 0.0),
-                        d: Vector3::new(0.0, 0.0, 2.0),
-                        r: 1.0,
-                    }),
-                    Component::from(Capsule{
-                        a: Point3::new(2.0, 0.0, 2.0),
-                        d: Vector3::new(-2.0, 0.0, 0.0),
-                        r: 1.0,
-                    }),
-                    Component::from(Capsule{
-                        a: Point3::new(0.0, 0.0, 2.0),
-                        d: Vector3::new(0.0, 0.0, -2.0),
-                        r: 1.0,
-                    })
-                ],
-                vec![ 1.0, 1.0, 1.0, 1.0 ]
-            );
-
-            let mut body1 = raft.clone();
-            let mut body2 = raft.clone();
-
-            body1 += Vector3::new(0.0, 5.0, 0.0);
-            body1.apply_impulse(Vector3::new(0.0, -4.0, 0.0) * 4.0, Vector3::zero());
-            body1.integrate(1.0);
-            body2 -= Vector3::new(0.0, 5.0, 0.0);
-            body2.apply_impulse(Vector3::new(0.0, 4.0, 0.0) * 4.0, Vector3::zero());
-            body2.integrate(1.0);
-
-            let mut manifold = Manifold::new();
-            assert!(body1.local_contacts(&body2, |c: LocalContact| {
-                manifold.push(c);
-            }));
-
-            assert_eq!(manifold.contacts.len(), 4);
-
-            PhysicsState::resolve_manifold::<DefaultPhysConfig, _, _>(&mut body1, &mut body2, &manifold, 1.0);
-            assert_eq!(body1.v, Vector3::new(0.0, 8.338712, 0.0));
-            assert_eq!(body2.v, Vector3::new(0.0, -8.338712, 0.0));
-            assert_eq!(body1.collider.rot, Quaternion::one());
-            assert_eq!(body2.collider.rot, Quaternion::one());
-
-            let static_rect = Rect {
-                c: Point3::new(0.0, 0.0, 0.0),
-                u: [ Vector3::new(1.0, 0.0, 0.0), Vector3::new(0.0, 0.0, 1.0) ],
-                e: [ 5.0, 5.0 ],
-            };
-
-            let mut body1 = raft.clone();
-            let mut body2 = StaticBody::new(0.0, &static_rect);
-
-            
-            body1 += Vector3::new(0.0, 5.0, 0.0);
-            body1.apply_impulse(Vector3::new(0.0, -4.0, 0.0) * 4.0, Vector3::zero());
-            body1.integrate(1.0);
-
-            assert_eq!(body1.v, Vector3::new(0.0, -4.0, 0.0));
- 
-            let mut manifold = Manifold::new();
-            assert!(body1.local_contacts(&body2, |c: LocalContact| {
-                manifold.push(c);
-            }));
-
-            assert_eq!(manifold.contacts.len(), 4);
-
-            PhysicsState::resolve_manifold::<DefaultPhysConfig, _, _>(&mut body1, &mut body2, &manifold, 1.0);
-
-            // Unfortunately an excess of an impulse comes from too many contact points.
-            assert_eq!(body1.v, Vector3::new(0.0, 8.337941, 0.0));
-            assert_eq!(body1.collider.rot, Quaternion::one());
-        }
+    fn friction(&self) -> f32 {
+        0.0
     }
 }

@@ -16,7 +16,7 @@
 use std::f32;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
-use cgmath::{EuclideanSpace, InnerSpace, Point3, Quaternion, Rotation, Vector3};
+use cgmath::{EuclideanSpace, InnerSpace, Point3, Rotation3, Vector3};
 
 use collision;
 
@@ -160,16 +160,6 @@ pub struct Sphere {
     pub r: f32,
 }
 
-impl Sphere {
-    /// Rotates the sphere about the origin
-    pub fn rotate(self, r: Quaternion<f32>) -> Self {
-        Sphere {
-            c: r.rotate_point(self.c),
-            ..self
-        }
-    }
-}
-
 /// A sphere swept along a line.
 ///
 /// Capsules are described as all of the spheres that have a center point
@@ -184,17 +174,6 @@ pub struct Capsule {
     pub d: Vector3<f32>,
     /// Radius of the sphere.
     pub r: f32,
-}
-
-impl Capsule {
-    /// Rotates the capsule about the origin
-    pub fn rotate(self, r: Quaternion<f32>) -> Self {
-        Capsule {
-            a: r.rotate_point(self.a),
-            d: r.rotate_vector(self.d),
-            ..self
-        }
-    }
 }
 
 impl From<Capsule> for Segment {
@@ -233,6 +212,12 @@ impl<T: Copy + Clone + Shape> Moving<T> {
 impl<T: Shape> AsRef<T> for Moving<T> {
     fn as_ref(&self) -> &T {
         &self.0
+    }
+}
+
+impl<T: Shape> AsMut<T> for Moving<T> {
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.0
     }
 }
 
@@ -772,8 +757,97 @@ impl Polygon for Rectangle {
 }
 
 /// A type that has volume.
-pub trait Volumetric {}
+///
+/// Any type that has Volume can be rotated about its center.
+pub trait Volumetric : Shape + Copy {
+    /// Rotate the bound in place. This is useless for spheres.
+    fn rotate<R: Rotation3<f32>>(&self, r: R) -> Self;
 
-impl Volumetric for AABB {}
-impl Volumetric for Sphere {}
-impl Volumetric for Capsule {}
+    /// Rotates the object around a point.
+    #[inline(always)]
+    fn rotate_about<R: Rotation3<f32>>(&self, r: R, p: Point3<f32>) -> Self {
+        let center = self.center();
+        let mut copy = *self;
+        copy.set_pos(p + r.rotate_vector(center - p));
+        copy.rotate(r)
+    }
+}
+
+impl Volumetric for AABB {
+    fn rotate<R: Rotation3<f32>>(&self, rot: R) -> AABB {
+        let r = self.r;
+        let vx = rot.rotate_vector(Vector3::new(r.x, 0.0, 0.0));
+        let vy = rot.rotate_vector(Vector3::new(0.0, r.y, 0.0));
+        let vz = rot.rotate_vector(Vector3::new(0.0, 0.0, r.z));
+        let p1 = self.c + (vx + vy + vz);
+        let p2 = self.c + (vx + vy - vz);
+        let p3 = self.c + (vx - vy + vz);
+        let p4 = self.c + (vx - vy - vz);
+        let p5 = self.c + (-vx + vy + vz);
+        let p6 = self.c + (-vx + vy - vz);
+        let p7 = self.c + (-vx - vy + vz);
+        let p8 = self.c + (-vx - vy - vz);
+        let lower = Vector3::new(
+            p1.x.min(
+                p2.x
+                    .min(p3.x.min(p4.x.min(p5.x.min(p6.x.min(p7.x.min(p8.x)))))),
+            ),
+            p1.y.min(
+                p2.y
+                    .min(p3.y.min(p4.y.min(p5.y.min(p6.y.min(p7.y.min(p8.y)))))),
+            ),
+            p1.z.min(
+                p2.z
+                    .min(p3.z.min(p4.z.min(p5.z.min(p6.z.min(p7.z.min(p8.z)))))),
+            ),
+        );
+        let upper = Vector3::new(
+            p1.x.max(
+                p2.x
+                    .max(p3.x.max(p4.x.max(p5.x.max(p6.x.max(p7.x.max(p8.x)))))),
+            ),
+            p1.y.max(
+                p2.y
+                    .max(p3.y.max(p4.y.max(p5.y.max(p6.y.max(p7.y.max(p8.y)))))),
+            ),
+            p1.z.max(
+                p2.z
+                    .max(p3.z.max(p4.z.max(p5.z.max(p6.z.max(p7.z.max(p8.z)))))),
+            ),
+        );
+        let r = (upper - lower) / 2.0;
+        let c = Point3::from_vec((upper + lower) / 2.0);
+        AABB { c, r }
+    }
+}
+impl Volumetric for Sphere {
+    /// Rotation to a bounding sphere does nothing.
+    #[inline(always)]
+    fn rotate<R: Rotation3<f32>>(&self, _: R) -> Sphere {
+        *self
+    }
+}
+
+impl Volumetric for Capsule {
+    #[inline(always)]
+    fn rotate<R: Rotation3<f32>>(&self, r: R) -> Self {
+        Capsule {
+            a: self.center() + r.rotate_vector(self.a - self.center()),
+            d: r.rotate_vector(self.d),
+            ..*self
+        }
+    }
+
+}
+
+/// Computes an orthonormal basis from a given vector. This is usually used to
+/// produce tangent vectors for friction contacts.
+/// Code taken from http://box2d.org/2014/02/computing-a-basis/
+pub fn compute_basis(n: &Vector3<f32>) -> [Vector3<f32>; 2] {
+    let b = if n.x.abs() >= 0.57735 {
+        Vector3::new(n.y, -n.x, 0.0)
+    } else {
+        Vector3::new(0.0, n.z, -n.y)
+    }.normalize();
+    [b, n.cross(b)]
+}
