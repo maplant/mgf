@@ -32,13 +32,11 @@ games, it may in the future.
 
 You can find working examples in the mgf_demo folder. Demos require gfx and
 gfx_glutin to display visuals. Be sure to build the demos in release mode to get
-adequate performance.
+adequate performance:
 
 ```
 cargo build --release
 ```
-
-to build 
 
 ## Contributing
 
