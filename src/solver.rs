@@ -204,8 +204,9 @@ impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
                     for i in 0..2 {
                         let lambda = -dv.dot(manifold.tangent_vector[i]) * contact_state.tangent_mass[i];
                         let max_lambda = friction * contact_state.normal_impulse;
-                        let prev_pt = contact_state.tangent_impulse[i];
-                        contact_state.tangent_impulse[i] = clamp(-max_lambda, max_lambda, prev_pt + lambda);
+                        let prev_impulse = contact_state.tangent_impulse[i];
+                        contact_state.tangent_impulse[i] =
+                            clamp(-max_lambda, max_lambda, prev_impulse + lambda);
                         let impulse = manifold.tangent_vector[i] * lambda;
                         va -= impulse * inv_mass_a;
                         oa -= inv_moment_a * ra.cross(impulse);
@@ -217,9 +218,9 @@ impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
                     // Calculate normal impulse
                     let vn = dv.dot(manifold.normal);
                     let lambda = contact_state.normal_mass * (-vn + contact_state.bias);
-                    let temp = contact_state.normal_impulse;
-                    contact_state.normal_impulse = (temp + lambda).max(0.0);
-                    let lambda = contact_state.normal_impulse - temp;
+                    let prev_impulse = contact_state.normal_impulse;
+                    contact_state.normal_impulse = (prev_impulse + lambda).max(0.0);
+                    let lambda = contact_state.normal_impulse - prev_impulse;
 
                     // Apply normal impulse
                     let impulse = manifold.normal * lambda;
