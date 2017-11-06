@@ -400,19 +400,25 @@ pub trait PhysicsObject {
     /// Integrate the object over the time step.
     fn integrate(&mut self, dt: f32);
 
+    /// Return the velocity of the object.
     fn get_dx(&self) -> Velocity;
 
+    /// Set the velocity of the object.
     fn set_dx(&mut self, v: Velocity);
 
     /// Return the position of the object at the end of the time step.
     fn pos(&self) -> Point3<f32>;
 
+    /// Return the inverse mass of the object.
     fn inv_mass(&self) -> f32;
 
+    /// Return the inverse moment of inertia tensor for the object.
     fn inv_moment(&self) -> Matrix3<f32>;
 
+    /// Return the coefficient of restitution for the object.
     fn restitution(&self) -> f32;
 
+    /// Return the friction coefficient for the object.
     fn friction(&self) -> f32;
 }
 

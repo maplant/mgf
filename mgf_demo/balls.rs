@@ -59,10 +59,12 @@ fn main() {
 
     let mut world = World::new(&mut factory);
 
+
+    // The following code and parameters are taken from nphysics3D in order to
+    // make a reasonable comparison.
+ 
     let body = SimpleDynamicBody::new(0.3, 0.6, Vector3::new(0.0, -9.8, 0.0), Sphere{ c: Point3::new(0.0, 0.0, 0.0), r: 0.5 }, 1.0);
 
-    // I took this section from nphysics to give a somewhat reasonable
-    // comparison:
     let num     = 1500.0f32.powf(1.0f32 / 3.0) as usize;
     let rad     = 0.5;
     let shift   = 2.5 * rad;
@@ -88,18 +90,6 @@ fn main() {
     rb.set_pos(Point3::new(0.0, 130.0, 0.0));
     world.insert_sphere(rb);
 
-    /*
-    body.set_pos(Point3::new(0.0, 10.0, 0.0));
-    body.apply_impulse(Vector3::new(0.1, 0.0, 0.1), Vector3::new(0.0, 0.0, 0.0));
-    let mut simple_body = body.clone();
-    simple_body.set_pos(Point3::new(5.0, 10.0, 0.0));
-    let body2 = simple_body.clone();
-    simple_body.set_pos(Point3::new(-5.0, 10.0, 0.0));
-
-
-    world.insert_sphere(simple_body);
-    world.insert_sphere(body2);
-    */
 
     let mut input = Input::new();
     input.bind_key(VirtualKeyCode::W, INPUT_UP);
@@ -126,4 +116,5 @@ fn main() {
         device.cleanup();
         encoder.flush(&mut device);
     }
+    println!("\nDemo finished");
 }

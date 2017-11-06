@@ -28,6 +28,18 @@ For the time being MGF is solely designed to handle 3D video games. This
 reflects my own use of MGF. If there is enough demand for MGF to support 2D
 games, it may in the future.
 
+## Examples
+
+You can find working examples in the mgf_demo folder. Demos require gfx and
+gfx_glutin to display visuals. Be sure to build the demos in release mode to get
+adequate performance.
+
+```
+cargo build --release
+```
+
+to build 
+
 ## Contributing
 
 MGF is welcome to anyone's contribution, and any part of the interface is open to 

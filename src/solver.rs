@@ -66,6 +66,7 @@ where
 }
 
 impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
+    /// Construct a new empty solver
     pub fn new() -> Self {
         ContactSolver {
             constraints: SmallVec::new(),
@@ -73,6 +74,7 @@ impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
         }
     }
 
+    /// Construct a new empty solver with a given capacity
     pub fn with_capacity(cap: usize) -> Self {
         ContactSolver {
             constraints: SmallVec::with_capacity(cap),
@@ -80,6 +82,10 @@ impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
         }
     }
 
+    /// Add a constraint to the solver and pre-solve the constraint.
+    ///
+    /// Unfortunately this interface requires taking two mutable references, so
+    /// it's hard to work with this interface safely. 
     pub fn add_constraint<'b, 'c>(
         &mut self,
         obj_a: &'b mut PhysicsObject,
@@ -173,6 +179,8 @@ impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
         });
     }
 
+    /// Solves the added constraints and updates the inserted physics objects
+    /// with the correct new velocities.
     pub fn solve(&mut self, iters: usize) {
         for _ in 0..iters {
             for &mut ContactConstraint{
