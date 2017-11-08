@@ -380,22 +380,6 @@ pub struct Contact {
     pub t: f32,
 }
 
-/*
-impl Contact {
-    /// Computes an orthonormal basis for the contact. This is usually used to
-    /// produce tangent vectors for friction contacts.
-    /// Code taken from http://box2d.org/2014/02/computing-a-basis/
-    pub fn compute_basis(&self) -> [Vector3<f32>; 2] {
-        let b = if self.n.x.abs() >= 0.57735 {
-            Vector3::new(self.n.y, -self.n.x, 0.0)
-        } else {
-            Vector3::new(0.0, self.n.z, -self.n.y)
-        }.normalize();
-        [b, self.n.cross(b)]
-    }
-}
-*/
-
 impl Neg for Contact {
     type Output = Contact;
 
@@ -1628,8 +1612,8 @@ mod tests {
         fn test_tri_collision() {
             let floor = Triangle {
                 a: Vector3::new(1.0, 1.0, 0.0),
-                b: Vector3::new(0.0, 1.0, 1.0),
-                c: Vector3::new(0.0, 1.0, -1.0),
+                c: Vector3::new(0.0, 1.0, 1.0),
+                b: Vector3::new(0.0, 1.0, -1.0),
             };
             let sphere_collide_center = Moving::sweep(
                 Sphere {
@@ -1844,8 +1828,8 @@ mod tests {
         fn test_tri_collision() {
             let floor = Triangle {
                 a: Vector3::new(1.0, 1.0, 0.0),
-                b: Vector3::new(0.0, 1.0, 1.0),
-                c: Vector3::new(0.0, 1.0, -1.0),
+                c: Vector3::new(0.0, 1.0, 1.0),
+                b: Vector3::new(0.0, 1.0, -1.0),
             };
             let capsule_clip_edge = Moving::sweep(
                 Capsule {

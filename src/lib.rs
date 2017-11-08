@@ -65,12 +65,12 @@
 //! let gravity = Vector3::new(0.0, -9.8, 0.0);
 //! let mass = 1.0;
 //! let mut body_a = SimpleDynamicBody::new(
-//!                         RESTITUTION, FRICTION, gravity,
-//!                         Sphere {
-//!                             c: Point3::new(0.0, 0.0, 0.0),
-//!                             r: 1.0,
-//!                         },
-//!                         mass
+//!     RESTITUTION, FRICTION, gravity,
+//!     Sphere {
+//!         c: Point3::new(0.0, 0.0, 0.0),
+//!         r: 1.0,
+//!     },
+//!     mass
 //! );
 //! // It is generally faster to clone a physics object than it is to construct
 //! // a new one.

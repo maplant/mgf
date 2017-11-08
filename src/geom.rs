@@ -36,7 +36,7 @@ pub struct Plane {
 impl From<(Point3<f32>, Point3<f32>, Point3<f32>)> for Plane {
     fn from(p: (Point3<f32>, Point3<f32>, Point3<f32>)) -> Self {
         let (a, b, c) = p;
-        let n = (b - a).cross(b - c).normalize();
+        let n = (b - a).cross(c - a).normalize();
         Plane {
             n: n,
             d: n.dot(a.to_vec()),
@@ -89,6 +89,12 @@ pub struct Triangle {
     pub b: Vector3<f32>,
     /// The third point in the triangle.
     pub c: Vector3<f32>,
+}
+
+impl Triangle {
+    pub fn normal(&self) -> Vector3<f32> {
+        (self.b - self.a).cross(self.c - self.a).normalize()
+    }
 }
 
 // TODO: in the future, check that the triangle is clockwise and orient it if it

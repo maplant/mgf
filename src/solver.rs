@@ -57,6 +57,7 @@ impl ContactSolverParams for DefaultContactSolverParams {
     const BAUMGARTE: f32 = 0.2;
 }
 
+/// A PGE based constraint solver for contacts. 
 pub struct ContactSolver<'a, Params = DefaultContactSolverParams>
 where
     Params: ContactSolverParams

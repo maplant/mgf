@@ -28,6 +28,21 @@ For the time being MGF is solely designed to handle 3D video games. This
 reflects my own use of MGF. If there is enough demand for MGF to support 2D
 games, it may in the future.
 
+## Differences between other collision detection/physics libraries
+
+Most collision detection and physics libraries provide similar to functionality
+to MGF, what differs is how they are implemented. Most libraries use the GJK
+algorithm to perform every type of collision, including continuous ones. MGF focuses
+on providing fast and accurate exact collision detection for moving geometries
+commonly found in games, such as `Spheres` and `Capsules`, and does not and cannot
+provide fast and accurate moving mesh on mesh collisions.
+
+One interesting result of the implementation is that the direction of the normal
+of a polygon determines the "side" it is facing, in a similar manner to how back-face
+culling is performed. This allows us to determine inter-object penetration much more
+accurately than we would be able to otherwise. The normal force essentially acts
+as the direction of propulsion for the object during physics resolution. 
+
 ## Examples
 
 You can find working examples in the mgf_demo folder. Demos require gfx and

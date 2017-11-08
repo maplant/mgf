@@ -69,7 +69,8 @@ pub struct World<R: Resources> {
     cam_up: Vector3<f32>,
     bodies: Vec<(SimpleDynamicBody<Sphere>, usize)>,
     bvh: BVH<AABB, usize>,
-    terrain: Mesh,
+    floor_terrain: Mesh,
+    wall_terrain: Mesh,
     locals: Buffer<R, Locals>,
     sphere_model: (Buffer<R, Vertex>, Slice<R>),
     terrain_model: (Buffer<R, Vertex>, Slice<R>),    
@@ -104,7 +105,8 @@ impl<R: Resources> World<R> {
                 .expect("failed to compile fragment shader")
         );
         // Generate terrain
-        let mut terrain_mesh = Mesh::new();
+        let mut floor_terrain_mesh = Mesh::new();
+        let mut wall_terrain_mesh = Mesh::new();
         let terrain_verts = [
             Vertex{ pos: [ -10.0, 0.0, -10.0 ] },
             Vertex{ pos: [ -10.0, 0.0, 10.0 ] },
@@ -116,29 +118,39 @@ impl<R: Resources> World<R> {
             Vertex{ pos: [ 10.0, 10.0, -10.0 ] },
 
         ];
-        for vert in terrain_verts.iter() {
-            terrain_mesh.push_vert(mgf::Vertex{
-                p: Point3::from(vert.pos),
+        for vert_i in 0..4 { 
+            floor_terrain_mesh.push_vert(mgf::Vertex{
+                p: Point3::from(terrain_verts[vert_i].pos),
                 n: Vector3::zero() // Not used
             });
         }
+        for vert in terrain_verts.iter() {
+            wall_terrain_mesh.push_vert(mgf::Vertex{
+                p: Point3::from(vert.pos),
+                n: Vector3::zero()
+            });
+        }
+        // Don't show the walls.
         let terrain_inds = vec![
             0u32, 1, 3,
             1, 2, 3,
         ];
         // It is extremely important to ensure that the triangle formed has the correct,
         // intended normal vector. This does not come from the mesh's stored value per vertex,
-        terrain_mesh.push_face((1, 0, 3));
-        terrain_mesh.push_face((2, 1, 3));
-        terrain_mesh.push_face((0, 1, 5));
-        terrain_mesh.push_face((5, 4, 0));
-        terrain_mesh.push_face((0, 7, 3));
-        terrain_mesh.push_face((4, 7, 0));
-        terrain_mesh.push_face((2, 3, 6));
-        terrain_mesh.push_face((6, 3, 7));
-        terrain_mesh.push_face((2, 5, 1));
-        terrain_mesh.push_face((5, 2, 6));
-        terrain_mesh.set_pos(Point3::new(0.0, -10.0, 0.0));
+        floor_terrain_mesh.push_face((0, 1, 3));
+        floor_terrain_mesh.push_face((1, 2, 3));
+        floor_terrain_mesh.set_pos(Point3::new(0.0, -10.0, 0.0));
+        // Extremely discontinuous surfaces, i.e. changes in slope of 90 degrees, is not
+        // handled particularly well with one StaticBody.
+        wall_terrain_mesh.push_face((0, 5, 1));
+        wall_terrain_mesh.push_face((0, 4, 5));
+        wall_terrain_mesh.push_face((0, 3, 7));
+        wall_terrain_mesh.push_face((0, 7, 4));
+        wall_terrain_mesh.push_face((2, 6, 3));
+        wall_terrain_mesh.push_face((3, 6, 7));
+        wall_terrain_mesh.push_face((1, 5, 2));
+        wall_terrain_mesh.push_face((2, 5, 6));
+        wall_terrain_mesh.set_pos(Point3::new(0.0, -10.0, 0.0));
         World {
             rot_x: 0.0,
             rot_y: 0.0,
@@ -147,7 +159,8 @@ impl<R: Resources> World<R> {
             cam_up: Vector3::unit_y(),
             bodies: Vec::new(),
             bvh: BVH::new(),
-            terrain:  terrain_mesh,
+            floor_terrain:  floor_terrain_mesh,
+            wall_terrain: wall_terrain_mesh,
             locals: factory.create_constant_buffer(1),
             sphere_model:  factory.create_vertex_buffer_with_slice(
                 &vertex_data, &index_data[..]
@@ -212,7 +225,8 @@ impl<R: Resources> World<R> {
     }
 
     fn step(&mut self, dt: f32) {
-        let mut terrain_body = StaticBody::new(0.5, &self.terrain);
+        let mut floor_body = StaticBody::new(0.5, &self.floor_terrain);
+        let mut wall_body = StaticBody::new(0.5, &self.wall_terrain);
         let mut contact_solver: ContactSolver = ContactSolver::new();
         for body_i in 0..self.bodies.len() {
             let (left, right) = (&mut self.bodies).split_at_mut(body_i);
@@ -241,13 +255,25 @@ impl<R: Resources> World<R> {
                 }
             });
             let mut pruner: ContactPruner = ContactPruner::new();
-            right[0].0.local_contacts(&terrain_body, |lc|{ pruner.push(lc); });
+            right[0].0.local_contacts(&floor_body, |lc|{ pruner.push(lc); });
             unsafe {
                 let body = &mut right[0].0 as *mut SimpleDynamicBody<Sphere>;
-                let terrain_body = &mut terrain_body as *mut StaticBody<Mesh>;
+                let floor_body = &mut floor_body as *mut StaticBody<Mesh>;
                 contact_solver.add_constraint(
                     &mut *body,
-                    &mut *terrain_body,
+                    &mut *floor_body,
+                    Manifold::from(pruner),
+                    dt
+                );
+            }
+            let mut pruner: ContactPruner = ContactPruner::new();
+            right[0].0.local_contacts(&wall_body, |lc|{ pruner.push(lc); });
+            unsafe {
+                let body = &mut right[0].0 as *mut SimpleDynamicBody<Sphere>;
+                let wall_body = &mut wall_body as *mut StaticBody<Mesh>;
+                contact_solver.add_constraint(
+                    &mut *body,
+                    &mut *wall_body,
                     Manifold::from(pruner),
                     dt
                 );
@@ -304,7 +330,7 @@ impl<R: Resources> World<R> {
         data.vbuf = self.terrain_model.0.clone();
         let locals = Locals {
             color: [ 0.3, 0.25, 0.55, 1.0 ],
-            model: Matrix4::from_translation(self.terrain.center().to_vec()).into(),
+            model: Matrix4::from_translation(self.floor_terrain.center().to_vec()).into(),
             view: view.into(),
             proj: proj.into(),
         };
