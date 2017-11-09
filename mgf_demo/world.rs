@@ -217,7 +217,6 @@ impl<R: Resources> World<R> {
         let mut contact_solver: ContactSolver = ContactSolver::new();
         // One promise we have to make due to using unsafe: We can't push any
         // rigid bodies to Vec before we solve collisions.
-        println!("\niter");
         for body_i in 0..self.bodies.len() {
             // Integrate the object and if necessary update its bounds.
             self.bodies[body_i].0.integrate(dt);
@@ -264,7 +263,6 @@ impl<R: Resources> World<R> {
                     bodies[body_i].0.local_contacts(
                         &bodies[collider_i].0,
                         |lc| {
-                            println!("lc = {:?}", lc);
                             pruner.push(lc);
                         }
                     );
