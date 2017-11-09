@@ -1136,7 +1136,11 @@ impl Contacts<Moving<Capsule>> for Capsule {
         let (p1, p2) = if let Some((p,_)) = 
             self_seg.min_dist(&Segment::from((c.a, c.a + v)))
         {
-            (p, self_seg.min_dist(&Segment::from((c.a + c.d, c.a + c.d + v))).unwrap().0)
+            if let Some((e, _)) = self_seg.min_dist(&Segment::from((c.a + c.d, c.a + c.d + v))) {
+                (p, e)
+            } else {
+                return false;
+            }
         } else {
             (self.a, self.a + self.d)
         };

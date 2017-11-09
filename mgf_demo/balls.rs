@@ -115,11 +115,12 @@ fn main() {
 
     while input.gather(&mut events_loop) {
         let start = time::Instant::now();
+        world.enter_frame(&input, 1.0 / 60.0);
         let elapsed = start.elapsed();
         print!("Physics step elapsed, took {} ms                \r",
                elapsed.as_secs() * 1000 +
                elapsed.subsec_nanos() as u64 / 1_000_000);
-        world.enter_frame(&input, 1.0 / 60.0);
+
         world.render(&mut encoder, color_view.clone(), depth_view.clone());
         window.set_cursor_position(SCREEN_WIDTH as i32 / 2, SCREEN_HEIGHT as i32 / 2).unwrap();
         window.swap_buffers().unwrap();

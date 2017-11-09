@@ -223,7 +223,7 @@ impl<R: Resources> World<R> {
             let bounds: AABB = self.bodies[body_i].0.bounds();
             if !self.bvh[self.bodies[body_i].1].contains(&bounds) {
                 self.bvh.remove(self.bodies[body_i].1);
-                self.bodies[body_i].1 = self.bvh.insert(&(bounds + 5.0), body_i);
+                self.bodies[body_i].1 = self.bvh.insert(&(bounds + 0.25), body_i);
             }
             
             let body_a = &mut self.bodies[body_i].0 as *mut SimpleDynamicBody<Component>;
@@ -276,7 +276,7 @@ impl<R: Resources> World<R> {
                 }
             );
         }
-        contact_solver.solve(20);
+        contact_solver.solve(10);
     }
     
     pub fn render<C>(
