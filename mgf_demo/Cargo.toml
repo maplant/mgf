@@ -15,3 +15,7 @@ rand = "*"
 [[bin]]
 name = "balls"
 path = "./balls.rs"
+
+[[bin]]
+name = "capsules"
+path = "./capsules.rs"

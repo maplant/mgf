@@ -67,7 +67,7 @@ pub struct World<R: Resources> {
     cam_pos: Point3<f32>,
     cam_dir: Vector3<f32>,
     cam_up: Vector3<f32>,
-    bodies: Vec<(SimpleDynamicBody<Sphere>, usize)>,
+    bodies: Vec<(SimpleDynamicBody<Component>, usize)>,
     bvh: BVH<AABB, usize>,
     terrain: Mesh,
     locals: Buffer<R, Locals>,
@@ -163,11 +163,11 @@ impl<R: Resources> World<R> {
         }
     }
 
-    pub fn insert_sphere(&mut self, r: SimpleDynamicBody<Sphere>) -> usize {
+    pub fn insert_body(&mut self, b: SimpleDynamicBody<Component>) -> usize {
         let id = self.bodies.len();
-        let bounds: AABB = r.bounds();
+        let bounds: AABB = b.bounds();
         let bvh_id = self.bvh.insert(&(bounds + 5.0), id);
-        self.bodies.push((r, bvh_id));
+        self.bodies.push((b, bvh_id));
         id
     }
 
@@ -216,7 +216,8 @@ impl<R: Resources> World<R> {
         let mut terrain_body = StaticBody::new(0.5, &self.terrain);
         let mut contact_solver: ContactSolver = ContactSolver::new();
         // One promise we have to make due to using unsafe: We can't push any
-        // rigid bodies to Vec before we solve collisions. 
+        // rigid bodies to Vec before we solve collisions.
+        println!("\niter");
         for body_i in 0..self.bodies.len() {
             // Integrate the object and if necessary update its bounds.
             self.bodies[body_i].0.integrate(dt);
@@ -226,7 +227,7 @@ impl<R: Resources> World<R> {
                 self.bodies[body_i].1 = self.bvh.insert(&(bounds + 5.0), body_i);
             }
             
-            let body_a = &mut self.bodies[body_i].0 as *mut SimpleDynamicBody<Sphere>;
+            let body_a = &mut self.bodies[body_i].0 as *mut SimpleDynamicBody<Component>;
 
             // Collide with terrain:
             let terrain_body_p = &mut terrain_body as *mut StaticBody<Mesh>;
@@ -263,10 +264,11 @@ impl<R: Resources> World<R> {
                     bodies[body_i].0.local_contacts(
                         &bodies[collider_i].0,
                         |lc| {
+                            println!("lc = {:?}", lc);
                             pruner.push(lc);
                         }
                     );
-                    let body_b = &mut bodies[collider_i].0 as *mut SimpleDynamicBody<Sphere>;
+                    let body_b = &mut bodies[collider_i].0 as *mut SimpleDynamicBody<Component>;
                     contact_solver.add_constraint(
                         unsafe { &mut *body_a },
                         unsafe { &mut *body_b },
@@ -311,18 +313,48 @@ impl<R: Resources> World<R> {
         };
 
         for body in self.bodies.iter() {
-            let locals = Locals {
-                color: [ between.ind_sample(&mut rng),
-                         between.ind_sample(&mut rng),
-                         between.ind_sample(&mut rng),
-                         1.0 ],
-                model: (Matrix4::from_translation(body.0.center().to_vec())
-                        * Matrix4::from_scale(body.0.collider.0.r)).into(),
-                view: view.into(),
-                proj: proj.into(),
-            };
-            encoder.update_buffer(&data.locals, &[locals], 0).unwrap();
-            encoder.draw(&self.sphere_model.1, &self.pipe_state, &data);
+            match body.0.collider {
+                Moving(Component::Sphere(s),_) => {
+                    let locals = Locals {
+                        color: [ between.ind_sample(&mut rng),
+                                 between.ind_sample(&mut rng),
+                                 between.ind_sample(&mut rng),
+                                 1.0 ],
+                        model: (Matrix4::from_translation(body.0.center().to_vec())
+                                * Matrix4::from_scale(s.r)).into(),
+                        view: view.into(),
+                        proj: proj.into(),
+                    };
+                    encoder.update_buffer(&data.locals, &[locals], 0).unwrap();
+                    encoder.draw(&self.sphere_model.1, &self.pipe_state, &data);
+                },
+
+                Moving(Component::Capsule(c),_) => {
+                    let color = [ between.ind_sample(&mut rng),
+                                  between.ind_sample(&mut rng),
+                                  between.ind_sample(&mut rng),
+                                  1.0 ];
+                    let d = body.0.q.rotate_vector(c.d) * 0.5;
+                    let locals = Locals {
+                        color,
+                        model: (Matrix4::from_translation(body.0.center().to_vec() + d)
+                                * Matrix4::from_scale(c.r)).into(),
+                        view: view.into(),
+                        proj: proj.into(),
+                    };
+                    encoder.update_buffer(&data.locals, &[locals], 0).unwrap();
+                    encoder.draw(&self.sphere_model.1, &self.pipe_state, &data);
+                    let locals = Locals {
+                        color,
+                        model: (Matrix4::from_translation(body.0.center().to_vec() - d)
+                                * Matrix4::from_scale(c.r)).into(),
+                        view: view.into(),
+                        proj: proj.into(),
+                    };
+                    encoder.update_buffer(&data.locals, &[locals], 0).unwrap();
+                    encoder.draw(&self.sphere_model.1, &self.pipe_state, &data);
+                },
+            }
         }
         data.vbuf = self.terrain_model.0.clone();
         let locals = Locals {
@@ -336,4 +368,4 @@ impl<R: Resources> World<R> {
     }
 }
             
-            
+        

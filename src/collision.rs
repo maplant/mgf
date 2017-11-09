@@ -650,27 +650,42 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
             v,
         );
 
-        let found_contact: Option<(Contact, Vector3<f32>)> =
-            p.last_contact(&start_sphere)
-            .map_or_else(
-                || { 
-                    p.last_contact(&end_sphere)
-                        .map(|c1: Contact| { (c1, -c.d) })
-                },
-                |c1: Contact| {
-                    p.last_contact(&end_sphere)
-                        .map_or(Some((c1, c.d)),
-                                |c2: Contact| {
-                                    if c2.t < c1.t {
-                                        Some((c2, -c.d))
-                                    } else {
-                                        Some((c1, c.d))
-                                    }
-                                })
-                });
+        let found_contact: Option<(Contact, Vector3<f32>, bool)> =
+            if let Some(c1) = p.last_contact(&start_sphere) {
+                if let Some(c2) = p.last_contact(&end_sphere) {
+                    if c2.t < c1.t {
+                        Some((c2, -c.d, false))
+                    } else {
+                        if c2.t == 0.0 {
+                            let contains_1 = self.contains(&c1.a);
+                            let contains_2 = self.contains(&c2.a);
+
+                            if contains_1 && contains_2 {
+                                callback(c2);
+                                callback(c1);
+                                return true;
+                            } else if contains_1 {
+                                Some((c1, c.d, true))
+                            } else if contains_2 {
+                                Some((c2, -c.d, true))
+                            } else {
+                                None
+                            }
+                        } else {
+                            Some((c1, c.d, false))
+                        }
+                    }
+                } else {
+                    Some((c1, c.d, false))
+                }
+            } else if let Some(c1) = p.last_contact(&end_sphere) {
+                Some((c1, -c.d, false))
+            } else {
+                None
+            };
 
         // The following needs to be completely refactored:
-        if let Some((contact, dir)) = found_contact {
+        if let Some((contact, dir, checked_contains)) = found_contact {
             // Next we determine which interval of spheres on he capsule
             // could possibly intersect with the triangle.
 
@@ -700,7 +715,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
             );
             
             // Find the first possible contact
-            if self.contains(&contact.a) {
+            if checked_contains || self.contains(&contact.a) {
                 // If the triangle contains the contact we know it is a 
                 // valid contact.
                 callback(contact);
@@ -1161,7 +1176,31 @@ impl Contacts<Moving<Capsule>> for Capsule {
                     &Moving::sweep(Sphere { c: c_a, r: c.r }, v), callback
                 );
             }
-            return false;
+            // TODO: redo the following or extract into function. 
+            let s_t = (clamp(t_min, 0.0, 1.0)
+                       + clamp(t_max, 0.0, 1.0)) * 0.5;
+            let o_t = (s_t - t_min) / (t_max - t_min);
+            let a_c = self.a + self.d * s_t;
+            let b_c = c_a + c_d * o_t;
+            let ab = b_c - a_c;
+            let n = if ab.is_zero() {
+                // If the distance between the two object's centers is zero, rely on
+                // velocity. If velocity is zero, no contact can be generated.
+                if v.is_zero() {
+                    return false;
+                } else {
+                    -v.normalize()
+                }
+            } else {
+                (b_c - a_c).normalize()
+            };
+            callback(Contact {
+                a: a_c + n * self.r,
+                b: b_c + -n * c.r,
+                t: 0.0,
+                n,
+            });
+            return true;
         }
 
         // Invariant: h_len > self.r + c.r => h_rat > 0.0

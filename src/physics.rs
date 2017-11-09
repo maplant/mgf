@@ -304,7 +304,8 @@ where
     B: Bound
 {
     fn bounds(&self) -> B {
-        self.collider.bounds()
+        let obj = Moving::sweep(self.collider.0.rotate(self.q), self.collider.1);
+        obj.bounds()
     }
 }
 
@@ -314,7 +315,8 @@ where
     RHS: Contacts<Moving<S>>
 {
     fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, mut callback: F) -> bool {
-        rhs.contacts(&self.collider, |c|callback(-c))
+        let obj = Moving::sweep(self.collider.0.rotate(self.q), self.collider.1);
+        rhs.contacts(&obj, |c|callback(-c))
     }
 }
 
@@ -426,16 +428,13 @@ impl PhysicsObject for CompoundDynamicBody {
     fn integrate(&mut self, dt: f32) {
         self.collider += self.v_step;
         self.collider.rot = (self.collider.rot
-                             + Quaternion::from_sv(0.0, self.omega)
+                             + Quaternion::from_sv(0.0, self.omega * dt)
                              * 0.5 * self.collider.rot).normalize();
         let r = Matrix3::from(self.collider.rot);
         self.inv_moment = r * self.inv_moment_body * r.transpose();
         self.v += self.force * self.total_inv_mass * dt;
         self.omega += self.inv_moment * self.torque * dt;
         self.v_step = self.v * dt;
-
-        self.v *= 1.0 / (1.0 + dt * 0.00001);
-        self.omega *= 1.0 / (1.0 + dt * 0.1);
     }
 
     fn get_dx(&self) -> Velocity {
@@ -478,16 +477,13 @@ where
     fn integrate(&mut self, dt: f32) {
         *self.collider.as_mut() += self.collider.1;
         self.q = (self.q
-                  + Quaternion::from_sv(0.0, self.omega)
+                  + Quaternion::from_sv(0.0, self.omega * dt)
                   * 0.5 * self.q).normalize();
         let r = Matrix3::from(self.q);
         self.inv_moment = r * self.inv_moment_body * r.transpose();
         self.v += self.inv_mass * self.force * dt;
         self.omega += self.inv_moment * self.torque * dt;
         self.collider.1 = self.v * dt;
-
-        self.v *= 1.0 / (1.0 + dt * 0.00001);
-        self.omega *= 1.0 / (1.0 + dt * 0.1);
     }
 
     fn get_dx(&self) -> Velocity {

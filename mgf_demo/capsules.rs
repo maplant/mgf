@@ -47,7 +47,7 @@ use glutin::Api::OpenGl;
 fn main() {
     let mut events_loop = glutin::EventsLoop::new();
     let windowbuilder = glutin::WindowBuilder::new()
-        .with_title("MGF Demo: \"Balls\" (tm)".to_string())
+        .with_title("MGF Demo: \"capsules\" (tm)".to_string())
         .with_dimensions(SCREEN_WIDTH, SCREEN_HEIGHT);
     let contextbuilder = glutin::ContextBuilder::new()
         .with_gl(GlRequest::Specific(OpenGl,(3,2)))
@@ -67,16 +67,17 @@ fn main() {
         0.3, 0.6,
         Vector3::new(0.0, -9.8, 0.0),
         Component::from(
-            Sphere{
-                c: Point3::new(0.0, 0.0, 0.0),
-                r: 0.5
+            Capsule{
+                a: Point3::new(-0.5, 0.0, 0.0),
+                d: Vector3::new(1.0, 0.0, 0.0),
+                r: 1.0
             }
         ),
         1.0
     );
 
     let num     = 1500.0f32.powf(1.0f32 / 3.0) as usize;
-    let rad     = 0.5;
+    let rad     = 2.0;
     let shift   = 2.5 * rad;
     let centerx = shift * (num as f32) / 2.0;
     let centery = shift * (num as f32) / 2.0;
@@ -96,10 +97,11 @@ fn main() {
         }
     }
 
-    let mut rb = body.clone();
-    rb.set_pos(Point3::new(0.0, 130.0, 0.0));
-    world.insert_body(rb);
-
+    {
+        let mut rb = body.clone();
+        rb.set_pos(Point3::new(0.0, 130.0, 0.0));
+        world.insert_body(rb);
+    }
 
     let mut input = Input::new();
     input.bind_key(VirtualKeyCode::W, INPUT_UP);
@@ -126,5 +128,5 @@ fn main() {
         device.cleanup();
         encoder.flush(&mut device);
     }
-    println!("\nDemo finished");
+    println!("\nDemo done");
 }
