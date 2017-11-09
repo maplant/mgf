@@ -16,7 +16,7 @@ The library provides various features such as:
 - discrete collision detection: `Overlaps`, `Contains`
 - continuous collision detection: `Intersection`, `Contact`, `LocalContact`
 - a bounding volume hierarchy: `BVH`
-- rigid body physics: `SimpleDynamicBody`, `CompoundDynamicBody`, `StaticBody`
+- rigid body physics: `SimpleDynamicBody`, `CompoundDynamicBody`, `StaticBody`, `ContactSolver`
 - dynamic containers: `Pool`
 
 MGF is very much in its infancy and is therefore not feature complete. If you
@@ -52,6 +52,8 @@ adequate performance:
 ```
 cargo build --release
 ```
+
+[Here is a link to a video of the demo in action.](https://www.youtube.com/watch?v=bPMm2_ttSq8)
 
 ## Contributing
 

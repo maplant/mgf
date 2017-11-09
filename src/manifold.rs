@@ -23,6 +23,7 @@ use smallvec::SmallVec;
 use collision::*;
 use geom::*;
 
+/// A type that supplies constants to a ContactPruner.
 pub trait PruningParams {
     /// Minimum distance between two points required to not reject a point.
     const PERSISTENT_THRESHOLD_SQ: f32;
@@ -114,6 +115,17 @@ pub struct Manifold {
     pub tangent_vector: [Vector3<f32>; 2],
     /// List of the local contact points.
     pub contacts: SmallVec<[(Point3<f32>, Point3<f32>); 4]>,
+}
+
+impl From<LocalContact> for Manifold {
+    fn from(lc: LocalContact) -> Self {
+        Manifold {
+            time: lc.global.t,
+            normal: lc.global.n,
+            tangent_vector: compute_basis(&lc.global.n),
+            contacts: SmallVec::from_vec(vec![(lc.local_a, lc.local_b)]),
+        }
+    }
 }
 
 impl<P: PruningParams> From<ContactPruner<P>> for Manifold {

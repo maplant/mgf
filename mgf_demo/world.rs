@@ -69,8 +69,7 @@ pub struct World<R: Resources> {
     cam_up: Vector3<f32>,
     bodies: Vec<(SimpleDynamicBody<Sphere>, usize)>,
     bvh: BVH<AABB, usize>,
-    floor_terrain: Mesh,
-    wall_terrain: Mesh,
+    terrain: Mesh,
     locals: Buffer<R, Locals>,
     sphere_model: (Buffer<R, Vertex>, Slice<R>),
     terrain_model: (Buffer<R, Vertex>, Slice<R>),    
@@ -105,8 +104,7 @@ impl<R: Resources> World<R> {
                 .expect("failed to compile fragment shader")
         );
         // Generate terrain
-        let mut floor_terrain_mesh = Mesh::new();
-        let mut wall_terrain_mesh = Mesh::new();
+        let mut terrain_mesh = Mesh::new();
         let terrain_verts = [
             Vertex{ pos: [ -10.0, 0.0, -10.0 ] },
             Vertex{ pos: [ -10.0, 0.0, 10.0 ] },
@@ -118,39 +116,30 @@ impl<R: Resources> World<R> {
             Vertex{ pos: [ 10.0, 10.0, -10.0 ] },
 
         ];
-        for vert_i in 0..4 { 
-            floor_terrain_mesh.push_vert(mgf::Vertex{
-                p: Point3::from(terrain_verts[vert_i].pos),
+        for vert in terrain_verts.iter() {
+            terrain_mesh.push_vert(mgf::Vertex{
+                p: Point3::from(vert.pos),
                 n: Vector3::zero() // Not used
             });
         }
-        for vert in terrain_verts.iter() {
-            wall_terrain_mesh.push_vert(mgf::Vertex{
-                p: Point3::from(vert.pos),
-                n: Vector3::zero()
-            });
-        }
-        // Don't show the walls.
         let terrain_inds = vec![
             0u32, 1, 3,
             1, 2, 3,
         ];
         // It is extremely important to ensure that the triangle formed has the correct,
         // intended normal vector. This does not come from the mesh's stored value per vertex,
-        floor_terrain_mesh.push_face((0, 1, 3));
-        floor_terrain_mesh.push_face((1, 2, 3));
-        floor_terrain_mesh.set_pos(Point3::new(0.0, -10.0, 0.0));
-        // Extremely discontinuous surfaces, i.e. changes in slope of 90 degrees, is not
-        // handled particularly well with one StaticBody.
-        wall_terrain_mesh.push_face((0, 5, 1));
-        wall_terrain_mesh.push_face((0, 4, 5));
-        wall_terrain_mesh.push_face((0, 3, 7));
-        wall_terrain_mesh.push_face((0, 7, 4));
-        wall_terrain_mesh.push_face((2, 6, 3));
-        wall_terrain_mesh.push_face((3, 6, 7));
-        wall_terrain_mesh.push_face((1, 5, 2));
-        wall_terrain_mesh.push_face((2, 5, 6));
-        wall_terrain_mesh.set_pos(Point3::new(0.0, -10.0, 0.0));
+        // but from the ordering of the points
+        terrain_mesh.push_face((0, 1, 3));
+        terrain_mesh.push_face((1, 2, 3));
+        terrain_mesh.push_face((0, 5, 1));
+        terrain_mesh.push_face((0, 4, 5));
+        terrain_mesh.push_face((0, 3, 7));
+        terrain_mesh.push_face((0, 7, 4));
+        terrain_mesh.push_face((2, 6, 3));
+        terrain_mesh.push_face((3, 6, 7));
+        terrain_mesh.push_face((1, 5, 2));
+        terrain_mesh.push_face((2, 5, 6));
+        terrain_mesh.set_pos(Point3::new(0.0, -10.0, 0.0));
         World {
             rot_x: 0.0,
             rot_y: 0.0,
@@ -159,8 +148,7 @@ impl<R: Resources> World<R> {
             cam_up: Vector3::unit_y(),
             bodies: Vec::new(),
             bvh: BVH::new(),
-            floor_terrain:  floor_terrain_mesh,
-            wall_terrain: wall_terrain_mesh,
+            terrain:  terrain_mesh,
             locals: factory.create_constant_buffer(1),
             sphere_model:  factory.create_vertex_buffer_with_slice(
                 &vertex_data, &index_data[..]
@@ -225,59 +213,68 @@ impl<R: Resources> World<R> {
     }
 
     fn step(&mut self, dt: f32) {
-        let mut floor_body = StaticBody::new(0.5, &self.floor_terrain);
-        let mut wall_body = StaticBody::new(0.5, &self.wall_terrain);
+        let mut terrain_body = StaticBody::new(0.5, &self.terrain);
         let mut contact_solver: ContactSolver = ContactSolver::new();
+        // One promise we have to make due to using unsafe: We can't push any
+        // rigid bodies to Vec before we solve collisions. 
         for body_i in 0..self.bodies.len() {
-            let (left, right) = (&mut self.bodies).split_at_mut(body_i);
-            right[0].0.integrate(dt);
-            let bounds: AABB = right[0].0.bounds();
-            if !self.bvh[right[0].1].contains(&bounds) {
-                self.bvh.remove(right[0].1);
-                right[0].1 = self.bvh.insert(&(bounds + 5.0), body_i);
+            // Integrate the object and if necessary update its bounds.
+            self.bodies[body_i].0.integrate(dt);
+            let bounds: AABB = self.bodies[body_i].0.bounds();
+            if !self.bvh[self.bodies[body_i].1].contains(&bounds) {
+                self.bvh.remove(self.bodies[body_i].1);
+                self.bodies[body_i].1 = self.bvh.insert(&(bounds + 5.0), body_i);
             }
-            let bvh = &self.bvh;
-            bvh.query(&bounds, |&id| {
-                if id >= body_i {
-                    return;
-                }
-                let mut pruner: ContactPruner = ContactPruner::new();
-                right[0].0.local_contacts(&left[id].0, |lc|{ pruner.push(lc); });
-                unsafe {
-                    let body_a = &mut right[0].0 as *mut SimpleDynamicBody<Sphere>;
-                    let body_b = &mut left[id].0 as *mut SimpleDynamicBody<Sphere>;
+            
+            let body_a = &mut self.bodies[body_i].0 as *mut SimpleDynamicBody<Sphere>;
+
+            // Collide with terrain:
+            let terrain_body_p = &mut terrain_body as *mut StaticBody<Mesh>;
+            self.bodies[body_i].0.local_contacts(
+                &terrain_body,
+                | lc | {
+                    // Create a new manifold for every contact with a terrain.
                     contact_solver.add_constraint(
-                        &mut *body_a,
-                        &mut *body_b,
+                        unsafe { &mut *body_a },
+                        unsafe { &mut *terrain_body_p },
+                        Manifold::from(lc),
+                        dt
+                    );
+                }
+            );
+
+            // If we're the first body integrated we don't need to do anything.
+            if body_i == 0 {
+                continue;
+            }
+
+            // Collide with other rigid bodies:
+            let bvh = &self.bvh;
+            let bodies = &mut self.bodies;
+            bvh.query(
+                &bounds,
+                |&collider_i| {
+                    // For rigid body collisions, collect the contacts into a pruner
+                    // and then put that into a manifold.
+                    if collider_i >= body_i {
+                        return;
+                    }
+                    let mut pruner: ContactPruner = ContactPruner::new();
+                    bodies[body_i].0.local_contacts(
+                        &bodies[collider_i].0,
+                        |lc| {
+                            pruner.push(lc);
+                        }
+                    );
+                    let body_b = &mut bodies[collider_i].0 as *mut SimpleDynamicBody<Sphere>;
+                    contact_solver.add_constraint(
+                        unsafe { &mut *body_a },
+                        unsafe { &mut *body_b },
                         Manifold::from(pruner),
                         dt
                     );
                 }
-            });
-            let mut pruner: ContactPruner = ContactPruner::new();
-            right[0].0.local_contacts(&floor_body, |lc|{ pruner.push(lc); });
-            unsafe {
-                let body = &mut right[0].0 as *mut SimpleDynamicBody<Sphere>;
-                let floor_body = &mut floor_body as *mut StaticBody<Mesh>;
-                contact_solver.add_constraint(
-                    &mut *body,
-                    &mut *floor_body,
-                    Manifold::from(pruner),
-                    dt
-                );
-            }
-            let mut pruner: ContactPruner = ContactPruner::new();
-            right[0].0.local_contacts(&wall_body, |lc|{ pruner.push(lc); });
-            unsafe {
-                let body = &mut right[0].0 as *mut SimpleDynamicBody<Sphere>;
-                let wall_body = &mut wall_body as *mut StaticBody<Mesh>;
-                contact_solver.add_constraint(
-                    &mut *body,
-                    &mut *wall_body,
-                    Manifold::from(pruner),
-                    dt
-                );
-            }
+            );
         }
         contact_solver.solve(20);
     }
@@ -330,7 +327,7 @@ impl<R: Resources> World<R> {
         data.vbuf = self.terrain_model.0.clone();
         let locals = Locals {
             color: [ 0.3, 0.25, 0.55, 1.0 ],
-            model: Matrix4::from_translation(self.floor_terrain.center().to_vec()).into(),
+            model: Matrix4::from_translation(self.terrain.center().to_vec()).into(),
             view: view.into(),
             proj: proj.into(),
         };
