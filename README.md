@@ -37,6 +37,8 @@ on providing fast and accurate exact collision detection for moving geometries
 commonly found in games, such as `Spheres` and `Capsules`, and does not and cannot
 provide fast and accurate moving mesh on mesh collisions.
 
+## Things to keep in mind
+
 One interesting result of the implementation is that the direction of the normal
 of a polygon determines the "side" it is facing, in a similar manner to how back-face
 culling is performed. This allows us to determine inter-object penetration much more
