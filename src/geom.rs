@@ -701,9 +701,8 @@ impl Particle for Segment {
 
 /// A type that is composed of vertices, edges and has a face.
 ///
-/// Besides being able to present their vertices and edges, a Polygon can
-/// produce a reference to some a face, which is a type that can be
-/// decomposed into a plane and determine if it contains a point.
+/// The property of having a face means that a polygon type can determine if a
+/// point is contained on its surface.
 pub trait Polygon
     : Copy
     + Shape
@@ -718,9 +717,9 @@ pub trait Polygon
 
     /// Returns the ith edge of the polygon as a pair of indices.
     ///
-    /// In the future this is hoped to be deprecate in favore of a constant
-    /// associated array. Unfortunately it is impossible as of this yet moment
-    /// to have arrays depend on associated constants yet.
+    /// In the future this is hoped to be deprecate in favor of a constant
+    /// associated array. Unfortunately it is impossible as of this moment
+    /// to have arrays depend on associated constants.
     fn edge(&self, usize) -> (usize, usize);
 }
 
