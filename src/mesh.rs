@@ -117,3 +117,22 @@ where
         collided
     }
 }
+
+/*
+impl<Recv> LocalContacts<Mesh> for Recv
+where
+    Recv: Contacts<Mesh> + Delta
+{
+    fn local_contacts<F: FnMut(LocalContact)>(&self, rhs: &Mesh, mut callback: F) -> bool {
+        self.contacts(rhs, |c| {
+            let a_c = self.center() + self.delta() * c.t;
+            let b_c = rhs.center();
+            callback(LocalContact {
+                local_a: c.a + -a_c.to_vec(),
+                local_b: c.b + -b_c.to_vec(),
+                global: c
+            })
+        })
+    }
+}
+*/

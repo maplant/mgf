@@ -157,5 +157,9 @@ impl Manifold {
             contacts: SmallVec::new(),
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.contacts.len()
+    }
 }
 

@@ -1291,7 +1291,7 @@ fn clamp(n: f32, min: f32, max: f32) -> f32 {
 impl<Recv, Arg> Contacts<Arg> for Moving<Recv>
 where
     Arg: Shape + Copy,
-    Recv: Contacts<Moving<Arg>> + Shape + Copy
+    Recv: Contacts<Moving<Arg>> + Shape
 {
     fn contacts<F: FnMut(Contact)>(&self, rhs: &Arg, mut callback: F) -> bool {
         let rhs_moving = Moving::sweep(*rhs, -self.1);
@@ -1413,7 +1413,7 @@ where
 impl<Recv, Arg> LocalContacts<Arg> for Moving<Recv>
 where
     Recv: Shape + Copy,
-    Arg: Contacts<Moving<Recv>> + Shape + Copy
+    Arg: Contacts<Moving<Recv>> + Shape
 {
     fn local_contacts<F: FnMut(LocalContact)>(&self, rhs: &Arg, mut callback: F) -> bool {
         rhs.contacts(self, |c| {

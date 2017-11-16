@@ -22,99 +22,91 @@ use smallvec::SmallVec;
 use manifold::*;
 use physics::*;
 
-struct ContactState {
-    bias: f32,
-    normal_mass: f32,
-    normal_impulse: f32,
-    tangent_mass: [f32; 2],
-    tangent_impulse: [f32; 2],
-}
-
-/// A constraint created by two objects coming in contact.
-pub struct ContactConstraint<'a> {
-    /// Mixed restitution of the two objects
-    pub friction: f32,
-    pub obj_a: &'a mut PhysicsObject,
-    pub obj_b: &'a mut PhysicsObject,
-    manifold: Manifold,
-    states: SmallVec<[ContactState; 4]>,
-}
-
-/// A type that describes parameters used when solving contact constraints.
-pub trait ContactSolverParams {
-    const PENETRATION_SLOP: f32;
-    const BAUMGARTE: f32;
-}
-
-/// The suggested set of parameters to use when resolving collisions.
-pub struct DefaultContactSolverParams {}
-
-/// A contact constraint solver for PhysicsObjects.
-///
-/// This is an unsafe interface in a lot of instances.
-impl ContactSolverParams for DefaultContactSolverParams {
-    const PENETRATION_SLOP: f32 = 0.05;
-    const BAUMGARTE: f32 = 0.2;
-}
-
-/// A PGE based constraint solver for contacts. 
-pub struct ContactSolver<'a, Params = DefaultContactSolverParams>
+pub trait ConstrainedSet<Index, Constrained, Extra>
 where
-    Params: ContactSolverParams
+    Index: Copy
 {
-    constraints: SmallVec<[ContactConstraint<'a>; 20]>,
+    fn get(&self, Index) -> (Constrained, Extra);
+    fn set(&mut self, Index, Constrained);
+}
+
+pub trait Constraint {
+    type Index: Copy;
+    type Constrained;
+    type Extra;
+
+    /// Solve the constraint.
+    fn solve<T: ConstrainedSet<Self::Index, Self::Constrained, Self::Extra>>(&mut self, &mut T);
+}
+
+pub struct Solver<C: Constraint> {
+    constraints: SmallVec<[C; 10]>,
+}
+
+impl<C: Constraint> Solver<C> {
+    pub fn new() -> Self {
+        Solver {
+            constraints: SmallVec::new(),
+        }
+    }
+
+    pub fn add_constraint(&mut self, constraint: C) {
+        self.constraints.push(constraint);
+    }
+
+    pub fn solve<T: ConstrainedSet<C::Index, C::Constrained, C::Extra>>(&mut self, cs: &mut T, iters: usize) {
+        for _ in 0..iters {
+            for constraint in self.constraints.iter_mut() {
+                constraint.solve(cs);
+            }
+        }
+    }
+}
+
+pub struct ContactConstraint<Index, Params = DefaultContactConstraintParams>
+where
+    Index: Copy,
+    Params: ContactConstraintParams
+{
+    obj_a: Index,
+    obj_b: Index,
+    manifold: Manifold,
+    friction: f32,
+    states: SmallVec<[ContactState; 4]>,
     params: PhantomData<Params>,
 }
 
-impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
-    /// Construct a new empty solver
-    pub fn new() -> Self {
-        ContactSolver {
-            constraints: SmallVec::new(),
-            params: PhantomData,
-        }
-    }
+impl<Index, Params> ContactConstraint<Index, Params>
+where
+    Index: Copy,
+    Params: ContactConstraintParams
+{
+    pub fn new<T: ConstrainedSet<Index, Velocity, RigidBodyInfo>>(pool: &T, obj_a: Index, obj_b: Index, manifold: Manifold, dt: f32) -> Self {
+        let (
+            Velocity { linear: va, angular: oa },
+            RigidBodyInfo {
+                x: xa,
+                restitution: rest_a,
+                friction: fric_a,
+                inv_mass: inv_mass_a,
+                inv_moment: inv_moment_a
+            }
+        ) = pool.get(obj_a);
 
-    /// Construct a new empty solver with a given capacity
-    pub fn with_capacity(cap: usize) -> Self {
-        ContactSolver {
-            constraints: SmallVec::with_capacity(cap),
-            params: PhantomData
-        }
-    }
-
-    /// Add a constraint to the solver and pre-solve the constraint.
-    ///
-    /// Unfortunately this interface requires taking two mutable references, so
-    /// it's hard to work with this interface safely. 
-    pub fn add_constraint<'b, 'c>(
-        &mut self,
-        obj_a: &'b mut PhysicsObject,
-        obj_b: &'c mut PhysicsObject,
-        manifold: Manifold,
-        dt: f32
-    ) where
-        'b: 'a,
-        'c: 'a,
-    {
-        if manifold.contacts.len() == 0 {
-            // Nothing to do.
-            return;
-        }
-
-        // Pre-solve the constraint:
-        let (xa, xb) = (obj_a.pos(), obj_b.pos());
-        let Velocity{ linear: va, angular: oa } = obj_a.get_dx();
-        let Velocity{ linear: vb, angular: ob } = obj_b.get_dx();
-
-        let inv_mass_a = obj_a.inv_mass();
-        let inv_moment_a = obj_a.inv_moment();
-        let inv_mass_b = obj_b.inv_mass();
-        let inv_moment_b = obj_b.inv_moment();
+        let (
+            Velocity { linear: vb, angular: ob },
+            RigidBodyInfo {
+                x: xb,
+                restitution: rest_b,
+                friction: fric_b,
+                inv_mass: inv_mass_b,
+                inv_moment: inv_moment_b
+            }
+        ) = pool.get(obj_b);
 
         // Mix restitution and friction values:
-        let restitution = obj_a.restitution().max(obj_b.restitution());
-        let friction = (obj_a.friction() * obj_b.friction()).sqrt();
+        let restitution = rest_a.max(rest_b);
+        let friction = (fric_a * fric_b).sqrt();
 
         // Calculate contact states for each contact
         let mut states = SmallVec::with_capacity(manifold.contacts.len());
@@ -170,72 +162,103 @@ impl<'a, Params: ContactSolverParams> ContactSolver<'a, Params> {
                 tangent_impulse: [ 0.0, 0.0 ]
             })
         }
-        
-        self.constraints.push(ContactConstraint {
-            friction,
+
+        ContactConstraint {
             obj_a,
             obj_b,
             manifold,
+            friction,
             states,
-        });
-    }
-
-    /// Solves the added constraints and updates the inserted physics objects
-    /// with the correct new velocities.
-    pub fn solve(&mut self, iters: usize) {
-        for _ in 0..iters {
-            for &mut ContactConstraint{
-                friction,
-                ref mut obj_a, ref mut obj_b,
-                ref manifold,
-                ref mut states,
-            } in self.constraints.iter_mut() {
-                let Velocity{ linear: mut va, angular: mut oa } = obj_a.get_dx();
-                let Velocity{ linear: mut vb, angular: mut ob } = obj_b.get_dx();
-                let inv_mass_a = obj_a.inv_mass();
-                let inv_moment_a = obj_a.inv_moment();
-                let inv_mass_b = obj_b.inv_mass();
-                let inv_moment_b = obj_b.inv_moment();
-                for (i, ref mut contact_state) in states.iter_mut().enumerate() {
-                    let (local_a, local_b) = manifold.contacts[i];
-                    let (ra, rb) = (local_a.to_vec(), local_b.to_vec());
-                    let dv = vb + ob.cross(rb) - va - oa.cross(ra);
-
-                    // Calculate friction impulse
-                    for i in 0..2 {
-                        let lambda = -dv.dot(manifold.tangent_vector[i]) * contact_state.tangent_mass[i];
-                        let max_lambda = friction * contact_state.normal_impulse;
-                        let prev_impulse = contact_state.tangent_impulse[i];
-                        contact_state.tangent_impulse[i] =
-                            clamp(-max_lambda, max_lambda, prev_impulse + lambda);
-                        let impulse = manifold.tangent_vector[i] * lambda;
-                        va -= impulse * inv_mass_a;
-                        oa -= inv_moment_a * ra.cross(impulse);
-                        vb += impulse * inv_mass_b;
-                        ob += inv_moment_b * rb.cross(impulse);
-                    }
-
-                    let dv = vb + ob.cross(rb) - va - oa.cross(ra);
-                    // Calculate normal impulse
-                    let vn = dv.dot(manifold.normal);
-                    let lambda = contact_state.normal_mass * (-vn + contact_state.bias);
-                    let prev_impulse = contact_state.normal_impulse;
-                    contact_state.normal_impulse = (prev_impulse + lambda).max(0.0);
-                    let lambda = contact_state.normal_impulse - prev_impulse;
-
-                    // Apply normal impulse
-                    let impulse = manifold.normal * lambda;
-                    va -= impulse * inv_mass_a;
-                    oa -= inv_moment_a * ra.cross(impulse);
-                    vb += impulse * inv_mass_b;
-                    ob += inv_moment_b * rb.cross(impulse);
-                   
-                }
-                obj_a.set_dx(Velocity{ linear: va, angular: oa });
-                obj_b.set_dx(Velocity{ linear: vb, angular: ob });
-            }
+            params: PhantomData,
         }
     }
+}
+
+impl<Index, Params> Constraint for ContactConstraint<Index, Params>
+where
+    Index: Copy,
+    Params: ContactConstraintParams
+{
+    type Index = Index;
+    type Constrained = Velocity;
+    type Extra = RigidBodyInfo;
+
+    fn solve<T: ConstrainedSet<Index, Velocity, RigidBodyInfo>>(&mut self, pool: &mut T) {
+        let (
+            Velocity{ linear: mut va, angular: mut oa },
+            RigidBodyInfo{ inv_mass: inv_mass_a, inv_moment: inv_moment_a, .. }
+        ) = pool.get(self.obj_a);
+
+        let (
+            Velocity{ linear: mut vb, angular: mut ob },
+            RigidBodyInfo{ inv_mass: inv_mass_b, inv_moment: inv_moment_b, .. }
+        ) = pool.get(self.obj_b);
+
+        for (i, ref mut contact_state) in self.states.iter_mut().enumerate() {
+            let (local_a, local_b) = self.manifold.contacts[i];
+            let (ra, rb) = (local_a.to_vec(), local_b.to_vec());
+            let dv = vb + ob.cross(rb) - va - oa.cross(ra);
+
+            // Calculate friction impulse
+            for i in 0..2 {
+                let lambda = -dv.dot(self.manifold.tangent_vector[i]) * contact_state.tangent_mass[i];
+                let max_lambda = self.friction * contact_state.normal_impulse;
+                let prev_impulse = contact_state.tangent_impulse[i];
+                contact_state.tangent_impulse[i] =
+                    clamp(-max_lambda, max_lambda, prev_impulse + lambda);
+                let impulse = self.manifold.tangent_vector[i] * lambda;
+                va -= impulse * inv_mass_a;
+                oa -= inv_moment_a * ra.cross(impulse);
+                vb += impulse * inv_mass_b;
+                ob += inv_moment_b * rb.cross(impulse);
+            }
+
+            let dv = vb + ob.cross(rb) - va - oa.cross(ra);
+            // Calculate normal impulse
+            let vn = dv.dot(self.manifold.normal);
+            let lambda = contact_state.normal_mass * (-vn + contact_state.bias);
+            let prev_impulse = contact_state.normal_impulse;
+            contact_state.normal_impulse = (prev_impulse + lambda).max(0.0);
+            let lambda = contact_state.normal_impulse - prev_impulse;
+
+            // Apply normal impulse
+            let impulse = self.manifold.normal * lambda;
+            va -= impulse * inv_mass_a;
+            oa -= inv_moment_a * ra.cross(impulse);
+            vb += impulse * inv_mass_b;
+            ob += inv_moment_b * rb.cross(impulse);
+            
+        }
+        pool.set(self.obj_a, Velocity{ linear: va, angular: oa });
+        pool.set(self.obj_b, Velocity{ linear: vb, angular: ob });
+    }
+
+}
+
+struct ContactState {
+    bias: f32,
+    normal_mass: f32,
+    normal_impulse: f32,
+    tangent_mass: [f32; 2],
+    tangent_impulse: [f32; 2],
+}
+
+
+/// A type that describes parameters used when solving contact constraints.
+pub trait ContactConstraintParams {
+    const PENETRATION_SLOP: f32;
+    const BAUMGARTE: f32;
+}
+
+/// The suggested set of parameters to use when resolving collisions.
+pub struct DefaultContactConstraintParams {}
+
+/// A contact constraint solver for PhysicsObjects.
+///
+/// This is an unsafe interface in a lot of instances.
+impl ContactConstraintParams for DefaultContactConstraintParams {
+    const PENETRATION_SLOP: f32 = 0.05;
+    const BAUMGARTE: f32 = 0.2;
 }
 
 #[inline(always)]

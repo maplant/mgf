@@ -41,66 +41,74 @@
 //!
 //! Physics is implemented through the following objects:
 //!
-//! - `SimpleDynamicBody`, a dynamic rigid body with a single geometry as a volume.
-//! - `CompoundDynamicBody`, a dynamic rigid body with a `Compound` geometry.
-//! - `StaticBody`, a static body with infinite mass (i.e. terrain) that can be any shape.
+//! - `RigidBodyVec`, a vector of rigid bodies.
+//! - `Solver`, a generic constraint-based solver.
+//! - `ContactConstraint`, a constraint modeling the collision of two objects.
 //!
 //! After contact points are accumulated, they are pruned via a `ContactPruner` and put
-//! through a constraint solver (called `ContactSolver`). The constraint solver is a
-//! slightly unsafe interface that requires passing a mutable pointer for each object in
-//! a contact. It will operate fine if you unsafely pass the same mutable pointer multiple
-//! times for different contacts. In fact, that's very typical. In the future this interface
-//! may be made safer but for now, be safe. Here is an example of a typical use case:
+//! through a constraint solver.
 //!
 //! ```rust
 //! use mgf::cgmath::prelude::*;
 //! use mgf::cgmath::*;
-//! use mgf::{ContactSolver, ContactPruner, LocalContacts, Manifold, 
-//!           PhysicsObject, SimpleDynamicBody, Shape, Sphere, Velocity};
+//! use mgf::*;
 //!
 //! const TIMESTEP: f32 = 1.0;
 //! const RESTITUTION: f32 = 0.3;
 //! const FRICTION: f32 = 0.5;
+//! const MASS: f32 = 1.0;
+//! const SOLVER_ITERS: usize = 20;
 //!
 //! let gravity = Vector3::new(0.0, -9.8, 0.0);
-//! let mass = 1.0;
-//! let mut body_a = SimpleDynamicBody::new(
-//!     RESTITUTION, FRICTION, gravity,
-//!     Sphere {
-//!         c: Point3::new(0.0, 0.0, 0.0),
-//!         r: 1.0,
-//!     },
-//!     mass
-//! );
-//! // It is generally faster to clone a physics object than it is to construct
-//! // a new one.
-//! let mut body_b = body_a.clone();
-//! 
-//! body_a.set_pos(Point3::new(-5.0, 0.0, 0.0));
-//! body_b.set_pos(Point3::new( 5.0, 0.0, 0.0));
 //!
-//! // Set the linear velocity of each of the objects.
-//! body_a.set_dx(Velocity{ linear: Vector3::new(0.0, 4.0, 0.0), angular: Vector3::zero() });
-//! body_b.set_dx(Velocity{ linear: Vector3::new(0.0, -4.0, 0.0), angular: Vector3::zero() });
+//! let mut rigid_bodies = RigidBodyVec::new();
+//! let mut sphere = Component::from(Sphere{ c: Point3::new(0.0, 0.0, 0.0), r: 1.0 });
 //!
-//! // ball_a and ball_b are set to collide at the end of one unit of time.
-//! // Integrate them to set their motion and hitboxes.
-//! body_a.integrate(TIMESTEP);
-//! body_b.integrate(TIMESTEP);
+//! sphere.set_pos(Point3::new(-5.0, 0.0, 0.0));
+//! let body_a = rigid_bodies.add_body(sphere, MASS, RESTITUTION, FRICTION, gravity);
+//!
+//! sphere.set_pos(Point3::new(5.0, 0.0, 0.0));
+//! let body_b = rigid_bodies.add_body(sphere, MASS, RESTITUTION, FRICTION, gravity);
+//!
+//! // Set the velocity for the objects.
+//! rigid_bodies.set(body_a, Velocity{ linear: Vector3::new(0.0, 4.0, 0.0), angular: Vector3::zero() });
+//! rigid_bodies.set(body_b, Velocity{ linear: Vector3::new(0.0, 4.0, 0.0), angular: Vector3::zero() });
+//!
+//! // Integrate the objects, creating colliders for each.
+//! rigid_bodies.integrate(TIMESTEP);
 //!
 //! // Collide the objects:
 //! let mut pruner: ContactPruner = ContactPruner::new();
-//! body_a.local_contacts(&body_b, |contact|{ pruner.push(contact); });
+//! let body_ai: usize = body_a.into();
+//! let body_bi: usize = body_b.into();
+//! rigid_bodies.collider[body_ai].local_contacts(
+//!     &rigid_bodies.collider[body_bi],
+//!     | lc | {
+//!         pruner.push(lc);
+//!     }
+//! );
 //!
-//! // Put the contacts in the constraint solver.
-//! // This is where the interface gets hairy, as adding a constraint to the
-//! // solver requires two mutable references. Often times physics objects will
-//! // be stored in a Vec or a Pool, so obtaining mutable references for two
-//! // objects is difficult. Unsafe is often necessary.
-//! const SOLVER_ITERS: usize = 20;
-//! let mut solver: ContactSolver = ContactSolver::new();
-//! solver.add_constraint(&mut body_a, &mut body_b, Manifold::from(pruner), TIMESTEP);
-//! solver.solve(SOLVER_ITERS);
+//! // Create the constraint solver:
+//! let mut solver = Solver::<ContactConstraint<_>>::new();
+//!
+//! // Create a manifold to pass to the contact solver as a constraint:
+//!
+//! // Obviously two spheres will only produce one contact. To avoid using a
+//! // pruner in this case a Manifold may be constructed from a single LocalContact:
+//! // let manifold = Manifold::from(local_contact);
+//!
+//! let manifold = Manifold::from(pruner);
+//! solver.add_constraint(
+//!     ContactConstraint::new(
+//!         &rigid_bodies,
+//!         body_a, body_b,
+//!         manifold,
+//!         TIMESTEP
+//!     )
+//! );
+//!
+//! // Solve the collision:
+//! solver.solve(&mut rigid_bodies, SOLVER_ITERS);
 //! ```
 
 #[macro_use]

@@ -62,10 +62,8 @@ fn main() {
 
     // The following code and parameters are taken from nphysics3D in order to
     // make a reasonable comparison.
- 
-    let body = SimpleDynamicBody::new(
-        0.3, 0.6,
-        Vector3::new(0.0, -9.8, 0.0),
+
+     let comp = Component::from(
         Component::from(
             Capsule{
                 a: Point3::new(-0.5, 0.0, 0.0),
@@ -73,8 +71,7 @@ fn main() {
                 r: 1.0
             }
         ),
-        1.0
-    );
+     );
 
     let num     = 1500.0f32.powf(1.0f32 / 3.0) as usize;
     let rad     = 2.0;
@@ -89,18 +86,11 @@ fn main() {
                 let y = 10.0 + j as f32 * 2.5 * rad + centery * 2.0;
                 let z = k as f32 * 2.5 * rad - centerx;
 
-                let mut rb = body.clone();
+                let mut rb = comp.clone();
                 rb.set_pos(Point3::new(x, y, z));
-
-                world.insert_body(rb);
+                world.add_body(rb, 1.0, 0.3, 0.6, Vector3::new(0.0, -9.8, 0.0));
             }
         }
-    }
-
-    {
-        let mut rb = body.clone();
-        rb.set_pos(Point3::new(0.0, 130.0, 0.0));
-        world.insert_body(rb);
     }
 
     let mut input = Input::new();
@@ -111,10 +101,6 @@ fn main() {
 
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
-    window.set_cursor_position(SCREEN_WIDTH as i32 / 2, SCREEN_HEIGHT as i32 / 2).unwrap();
-    window.set_cursor_state(glutin::CursorState::Grab)
-        .ok().expect("could not grab mouse cursor");
-
     while input.gather(&mut events_loop) {
         let start = time::Instant::now();
         world.enter_frame(&input, 1.0 / 60.0);
@@ -124,7 +110,6 @@ fn main() {
                elapsed.subsec_nanos() as u64 / 1_000_000);
 
         world.render(&mut encoder, color_view.clone(), depth_view.clone());
-        window.set_cursor_position(SCREEN_WIDTH as i32 / 2, SCREEN_HEIGHT as i32 / 2).unwrap();
         window.swap_buffers().unwrap();
         device.cleanup();
         encoder.flush(&mut device);

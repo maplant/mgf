@@ -23,7 +23,7 @@ use rand::distributions::{Range, IndependentSample};
 
 use genmesh;
 use genmesh::{Vertices, Triangulate};
-use genmesh::generators::{SphereUV, SharedVertex, IndexedPolygon};
+use genmesh::generators::{SphereUV, Cylinder, SharedVertex, IndexedPolygon};
 
 use gfx;
 use gfx::{CommandBuffer, Encoder, PipelineState, Primitive, Resources, Slice, ShaderSet};
@@ -67,11 +67,13 @@ pub struct World<R: Resources> {
     cam_pos: Point3<f32>,
     cam_dir: Vector3<f32>,
     cam_up: Vector3<f32>,
-    bodies: Vec<(SimpleDynamicBody<Component>, usize)>,
+    bodies: RigidBodyVec,
+    bvh_ids: Vec<usize>,
     bvh: BVH<AABB, usize>,
     terrain: Mesh,
     locals: Buffer<R, Locals>,
     sphere_model: (Buffer<R, Vertex>, Slice<R>),
+    cylinder_model: (Buffer<R, Vertex>, Slice<R>),
     terrain_model: (Buffer<R, Vertex>, Slice<R>),    
     pipe_state: PipelineState<R, pipe::Meta>,
 }
@@ -83,18 +85,6 @@ pub const ZNEAR: f32 = 0.1;
 
 impl<R: Resources> World<R> {
     pub fn new<F: Factory<R>>(factory: &mut F) -> Self {
-        // Generate sphere
-        let sphere = SphereUV::new(25, 25);
-        let vertex_data: Vec<Vertex> = sphere.shared_vertex_iter()
-            .map(|genmesh::Vertex{ pos, .. }| {
-                Vertex{ pos }
-            })
-            .collect();
-        let index_data: Vec<u32> = sphere.indexed_polygon_iter()
-            .triangulate()
-            .vertices()
-            .map(|i| i as u32)
-            .collect();
         let shaders = ShaderSet::Simple(
             factory.create_shader_vertex(
                 include_bytes!(shader_file!("balls_vs.glsl")))
@@ -103,7 +93,29 @@ impl<R: Resources> World<R> {
                 include_bytes!(shader_file!("balls_fs.glsl")))
                 .expect("failed to compile fragment shader")
         );
-        // Generate terrain
+
+        let sphere = SphereUV::new(25, 25);
+        let sphere_verts: Vec<Vertex> = sphere.shared_vertex_iter()
+            .map(|genmesh::Vertex{ pos, .. }| {
+                Vertex{ pos }
+            })
+            .collect();
+        let sphere_inds: Vec<u32> = sphere.indexed_polygon_iter()
+            .triangulate()
+            .vertices()
+            .map(|i| i as u32)
+            .collect();
+        let cylinder = Cylinder::new(25);
+        let cylinder_verts: Vec<Vertex> = cylinder.shared_vertex_iter()
+            .map(|genmesh::Vertex{ pos, .. }| {
+                Vertex{ pos: [pos[0], pos[2] / 2.0,  pos[1]] }
+            })
+            .collect();
+        let cylinder_inds: Vec<u32> = cylinder.indexed_polygon_iter()
+            .triangulate()
+            .vertices()
+            .map(|i| i as u32)
+            .collect();
         let mut terrain_mesh = Mesh::new();
         let terrain_verts = [
             Vertex{ pos: [ -10.0, 0.0, -10.0 ] },
@@ -146,12 +158,16 @@ impl<R: Resources> World<R> {
             cam_pos: Point3::new(-20.0, 5.0, 0.0),
             cam_dir: Vector3::unit_x(),
             cam_up: Vector3::unit_y(),
-            bodies: Vec::new(),
+            bodies: RigidBodyVec::new(),
+            bvh_ids: Vec::new(),
             bvh: BVH::new(),
             terrain:  terrain_mesh,
             locals: factory.create_constant_buffer(1),
             sphere_model:  factory.create_vertex_buffer_with_slice(
-                &vertex_data, &index_data[..]
+                &sphere_verts, &sphere_inds[..]
+            ),
+            cylinder_model: factory.create_vertex_buffer_with_slice(
+                &cylinder_verts, &cylinder_inds[..]
             ),
             terrain_model: factory.create_vertex_buffer_with_slice(
                 &terrain_verts, &terrain_inds[..]
@@ -163,11 +179,11 @@ impl<R: Resources> World<R> {
         }
     }
 
-    pub fn insert_body(&mut self, b: SimpleDynamicBody<Component>) -> usize {
-        let id = self.bodies.len();
-        let bounds: AABB = b.bounds();
-        let bvh_id = self.bvh.insert(&(bounds + 5.0), id);
-        self.bodies.push((b, bvh_id));
+    pub fn add_body(&mut self, collider: Component, mass: f32, restitution: f32, friction: f32, world_force: Vector3<f32>) -> usize {
+        let id: usize = self.bodies.add_body(collider, mass, restitution, friction, world_force).into();
+        let bounds: AABB = self.bodies.collider[id].bounds();
+        let bvh_id = self.bvh.insert(&(bounds + 0.25), id);
+        self.bvh_ids.push(bvh_id);
         id
     }
 
@@ -213,70 +229,72 @@ impl<R: Resources> World<R> {
     }
 
     fn step(&mut self, dt: f32) {
-        let mut terrain_body = StaticBody::new(0.5, &self.terrain);
-        let mut contact_solver: ContactSolver = ContactSolver::new();
-        // One promise we have to make due to using unsafe: We can't push any
-        // rigid bodies to Vec before we solve collisions.
-        for body_i in 0..self.bodies.len() {
-            // Integrate the object and if necessary update its bounds.
-            self.bodies[body_i].0.integrate(dt);
-            let bounds: AABB = self.bodies[body_i].0.bounds();
-            if !self.bvh[self.bodies[body_i].1].contains(&bounds) {
-                self.bvh.remove(self.bodies[body_i].1);
-                self.bodies[body_i].1 = self.bvh.insert(&(bounds + 0.25), body_i);
-            }
-            
-            let body_a = &mut self.bodies[body_i].0 as *mut SimpleDynamicBody<Component>;
+        let mut solver = Solver::<ContactConstraint<_>>::new();
 
-            // Collide with terrain:
-            let terrain_body_p = &mut terrain_body as *mut StaticBody<Mesh>;
-            self.bodies[body_i].0.local_contacts(
-                &terrain_body,
+        self.bodies.complete_motion();
+        self.bodies.integrate(dt);
+
+        for (i, collider) in self.bodies.collider.iter().enumerate() {
+            let bounds: AABB = collider.bounds();
+            if !self.bvh[self.bvh_ids[i]].contains(&bounds) {
+                self.bvh.remove(self.bvh_ids[i]);
+                self.bvh_ids[i] = self.bvh.insert(&(bounds + 0.25), i);
+            }
+
+            collider.local_contacts(
+                &self.terrain,
                 | lc | {
-                    // Create a new manifold for every contact with a terrain.
-                    contact_solver.add_constraint(
-                        unsafe { &mut *body_a },
-                        unsafe { &mut *terrain_body_p },
-                        Manifold::from(lc),
-                        dt
-                    );
+                    solver.add_constraint(
+                        ContactConstraint::new(
+                            &self.bodies,
+                            RigidBodyRef::Dynamic(i),
+                            RigidBodyRef::Static{ center: self.terrain.center(), friction: 0.0 },
+                            Manifold::from(lc),
+                            dt,
+                        )
+                    )
                 }
             );
-
+            
             // If we're the first body integrated we don't need to do anything.
-            if body_i == 0 {
+            if i == 0 {
                 continue;
             }
 
-            // Collide with other rigid bodies:
             let bvh = &self.bvh;
-            let bodies = &mut self.bodies;
             bvh.query(
                 &bounds,
                 |&collider_i| {
                     // For rigid body collisions, collect the contacts into a pruner
                     // and then put that into a manifold.
-                    if collider_i >= body_i {
+                    if collider_i >= i {
                         return;
                     }
                     let mut pruner: ContactPruner = ContactPruner::new();
-                    bodies[body_i].0.local_contacts(
-                        &bodies[collider_i].0,
+                    collider.local_contacts(
+                        &self.bodies.collider[collider_i],
                         |lc| {
                             pruner.push(lc);
                         }
                     );
-                    let body_b = &mut bodies[collider_i].0 as *mut SimpleDynamicBody<Component>;
-                    contact_solver.add_constraint(
-                        unsafe { &mut *body_a },
-                        unsafe { &mut *body_b },
-                        Manifold::from(pruner),
-                        dt
+                    let manifold = Manifold::from(pruner);
+                    if manifold.len() == 0 {
+                        return;
+                    }
+                    solver.add_constraint(
+                        ContactConstraint::new(
+                            &self.bodies,
+                            RigidBodyRef::Dynamic(i),
+                            RigidBodyRef::Dynamic(collider_i),
+                            manifold,
+                            dt,
+                        )
                     );
                 }
             );
         }
-        contact_solver.solve(10);
+
+        solver.solve(&mut self.bodies, 20);
     }
     
     pub fn render<C>(
@@ -310,15 +328,15 @@ impl<R: Resources> World<R> {
             out_depth: depth,
         };
 
-        for body in self.bodies.iter() {
-            match body.0.collider {
+        for (i, &collider) in self.bodies.collider.iter().enumerate() {
+            match collider {
                 Moving(Component::Sphere(s),_) => {
                     let locals = Locals {
                         color: [ between.ind_sample(&mut rng),
                                  between.ind_sample(&mut rng),
                                  between.ind_sample(&mut rng),
                                  1.0 ],
-                        model: (Matrix4::from_translation(body.0.center().to_vec())
+                        model: (Matrix4::from_translation(self.bodies.x[i].to_vec())
                                 * Matrix4::from_scale(s.r)).into(),
                         view: view.into(),
                         proj: proj.into(),
@@ -332,10 +350,9 @@ impl<R: Resources> World<R> {
                                   between.ind_sample(&mut rng),
                                   between.ind_sample(&mut rng),
                                   1.0 ];
-                    let d = body.0.q.rotate_vector(c.d) * 0.5;
                     let locals = Locals {
                         color,
-                        model: (Matrix4::from_translation(body.0.center().to_vec() + d)
+                        model: (Matrix4::from_translation(c.a.to_vec())
                                 * Matrix4::from_scale(c.r)).into(),
                         view: view.into(),
                         proj: proj.into(),
@@ -344,13 +361,25 @@ impl<R: Resources> World<R> {
                     encoder.draw(&self.sphere_model.1, &self.pipe_state, &data);
                     let locals = Locals {
                         color,
-                        model: (Matrix4::from_translation(body.0.center().to_vec() - d)
+                        model: (Matrix4::from_translation(c.a.to_vec() + c.d)
                                 * Matrix4::from_scale(c.r)).into(),
                         view: view.into(),
                         proj: proj.into(),
                     };
                     encoder.update_buffer(&data.locals, &[locals], 0).unwrap();
                     encoder.draw(&self.sphere_model.1, &self.pipe_state, &data);
+                    let locals = Locals {
+                        color,
+                        model: (Matrix4::from_translation(c.center().to_vec())
+                                * Matrix4::from(self.bodies.q[i])
+                                * Matrix4::from_nonuniform_scale(c.r, c.d.magnitude(), c.r)).into(),
+                        view: view.into(),
+                        proj: proj.into(),
+                    };
+                    data.vbuf = self.cylinder_model.0.clone();
+                    encoder.update_buffer(&data.locals, &[locals], 0).unwrap();
+                    encoder.draw(&self.cylinder_model.1, &self.pipe_state, &data);
+                    data.vbuf = self.sphere_model.0.clone();
                 },
             }
         }

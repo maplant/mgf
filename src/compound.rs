@@ -15,6 +15,7 @@
 
 use std::vec::Vec;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
+use cgmath::prelude::*;
 use cgmath::{EuclideanSpace, Rotation, Rotation3, Vector3, Point3, Quaternion, One, Zero};
 
 use smallvec::SmallVec;
@@ -34,7 +35,23 @@ pub enum Component {
     // More shapes to come...
 }
 
+impl Component {
+    #[inline(always)]
+    pub fn deconstruct(&self) -> (Point3<f32>, Quaternion<f32>, ComponentConstructor)  {
+        match self {
+            &Component::Sphere(Sphere{ r, c }) =>
+                (c, Quaternion::one(), ComponentConstructor::Sphere{ r }),
+            &Component::Capsule(Capsule{ r, a, d }) => {
+                let h = d.magnitude();
+                let rot = Quaternion::from_arc(Vector3::new(0.0, 1.0, 0.0) * h, d, None);
+                (a + d * 0.5, rot, ComponentConstructor::Capsule{ r, half_h: h * 0.5 })
+            },
+        }
+    }
+}
+
 impl Volumetric for Component {
+    #[inline(always)]
     fn rotate<R: Rotation3<f32>>(&self, r: R) -> Self {
         match self {
             &Component::Sphere(ref s) => Component::Sphere(s.rotate(r)),
@@ -164,6 +181,42 @@ where
     }
 }
 
+impl LocalContacts<Moving<Component>> for Moving<Component> {
+    fn local_contacts<F: FnMut(LocalContact)>(&self, rhs: &Moving<Component>, mut callback: F) -> bool {
+        self.contacts(
+            rhs,
+            | c | {
+                callback(
+                    LocalContact {
+                        local_a: c.a + -(self.0.center() + self.1 * c.t).to_vec(),
+                        local_b: c.b + -(rhs.0.center() + rhs.1 * c.t).to_vec(),
+                        global: c,
+                    }
+                );
+            }
+        )
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum ComponentConstructor {
+    Sphere{ r: f32 },
+    Capsule{ r: f32, half_h: f32 },
+    // More shapes to come...
+}
+
+impl ComponentConstructor {
+    #[inline(always)]
+    pub fn construct<R: Rotation3<f32>>(&self, p: Point3<f32>, rot: R) -> Component {
+        match self {
+            &ComponentConstructor::Sphere{ r } => Component::Sphere(Sphere{ r, c: p }),
+            &ComponentConstructor::Capsule{ r, half_h } => {
+                let d = rot.rotate_vector(Vector3::new(0.0, 1.0, 0.0) * half_h); 
+                Component::Capsule(Capsule{ r: r, a: p + -d, d: d * 2.0 })
+            },
+        }
+    }
+}
 
 /// An aggregate structure of Spheres and Capsules. Has a position and rotation.
 #[derive(Clone)]

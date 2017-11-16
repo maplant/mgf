@@ -209,6 +209,9 @@ impl<T: Copy + Clone + Shape> Moving<T> {
         Moving(obj, vel)
     }
 
+}
+
+impl<T: Shape> Moving<T> {
     /// Return the velocity of the object.
     pub fn vel(&self) -> Vector3<f32> {
         self.1

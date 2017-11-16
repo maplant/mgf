@@ -57,7 +57,7 @@ impl<B: Bound> BoundedBy<B> for B {
     }
 }
 
-impl<B: Bound, T: Copy + Clone + Shape +BoundedBy<B>> BoundedBy<B> for Moving<T> {
+impl<B: Bound, T: Copy + Clone + Shape + BoundedBy<B>> BoundedBy<B> for Moving<T> {
     /// The bounds for a swept object is the bounds extended in the direction
     /// and magnitude of the velocity.
     fn bounds(&self) -> B {
