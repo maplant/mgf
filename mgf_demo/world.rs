@@ -15,7 +15,6 @@
 
 use cgmath;
 use cgmath::*;
-use mgf;
 use mgf::*;
 
 use rand::{SeedableRng, StdRng};
@@ -129,10 +128,7 @@ impl<R: Resources> World<R> {
 
         ];
         for vert in terrain_verts.iter() {
-            terrain_mesh.push_vert(mgf::Vertex{
-                p: Point3::from(vert.pos),
-                n: Vector3::zero() // Not used
-            });
+            terrain_mesh.push_vert(Point3::from(vert.pos));
         }
         let terrain_inds = vec![
             0u32, 1, 3,
@@ -234,7 +230,7 @@ impl<R: Resources> World<R> {
         self.bodies.complete_motion();
         self.bodies.integrate(dt);
 
-        for (i, collider) in self.bodies.collider.iter().enumerate() {
+        for (i, collider) in self.bodies.colliders().enumerate() {
             let bounds: AABB = collider.bounds();
             if !self.bvh[self.bvh_ids[i]].contains(&bounds) {
                 self.bvh.remove(self.bvh_ids[i]);

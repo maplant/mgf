@@ -767,22 +767,21 @@ impl Polygon for Rectangle {
 /// A type that has volume.
 ///
 /// Any type that has Volume can be rotated about its center.
-pub trait Volumetric : Shape + Copy {
+pub trait Volumetric : Shape + Clone {
     /// Rotate the bound in place. This is useless for spheres.
-    fn rotate<R: Rotation3<f32>>(&self, r: R) -> Self;
+    fn rotate<R: Rotation3<f32>>(self, r: R) -> Self;
 
     /// Rotates the object around a point.
     #[inline(always)]
-    fn rotate_about<R: Rotation3<f32>>(&self, r: R, p: Point3<f32>) -> Self {
+    fn rotate_about<R: Rotation3<f32>>(mut self, r: R, p: Point3<f32>) -> Self {
         let center = self.center();
-        let mut copy = *self;
-        copy.set_pos(p + r.rotate_vector(center - p));
-        copy.rotate(r)
+        self.set_pos(p + r.rotate_vector(center - p));
+        self.rotate(r)
     }
 }
 
 impl Volumetric for AABB {
-    fn rotate<R: Rotation3<f32>>(&self, rot: R) -> AABB {
+    fn rotate<R: Rotation3<f32>>(self, rot: R) -> AABB {
         let r = self.r;
         let vx = rot.rotate_vector(Vector3::new(r.x, 0.0, 0.0));
         let vy = rot.rotate_vector(Vector3::new(0.0, r.y, 0.0));
@@ -831,18 +830,18 @@ impl Volumetric for AABB {
 impl Volumetric for Sphere {
     /// Rotation to a bounding sphere does nothing.
     #[inline(always)]
-    fn rotate<R: Rotation3<f32>>(&self, _: R) -> Sphere {
-        *self
+    fn rotate<R: Rotation3<f32>>(self, _: R) -> Sphere {
+        self
     }
 }
 
 impl Volumetric for Capsule {
     #[inline(always)]
-    fn rotate<R: Rotation3<f32>>(&self, r: R) -> Self {
+    fn rotate<R: Rotation3<f32>>(self, r: R) -> Self {
         Capsule {
             a: self.center() + r.rotate_vector(self.a - self.center()),
             d: r.rotate_vector(self.d),
-            ..*self
+            ..self
         }
     }
 

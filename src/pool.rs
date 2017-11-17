@@ -60,11 +60,19 @@ impl<T> Pool<T> {
         self.len == 0
     }
 
+    /// Returns the number of occupied slots in the pool.
     pub fn len(&self) -> usize {
         self.len
     }
 
-    /// Push a new item to the Pool. Attempts to use spots left empty from
+    /// Removes all entries from the pool.
+    pub fn clear(&mut self) {
+        self.len = 0;
+        self.free_list = None;
+        self.entries.clear();
+    }
+
+    /// Push a new item to the pool. Attempts to use spots left empty from
     /// removed items before performing a heap allocation.
     pub fn push(&mut self, item: T) -> usize {
         self.len += 1;

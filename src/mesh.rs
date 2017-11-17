@@ -20,19 +20,15 @@ use bvh::*;
 use geom::*;
 use collision::*;
 use bounds::{BoundedBy};
-use cgmath::{EuclideanSpace, Vector3, Point3, Zero};
-
-/// A point and a normal 
-pub struct Vertex {
-    pub p: Point3<f32>,
-    pub n: Vector3<f32>,
-}
+use cgmath::prelude::*;
+use cgmath::{Vector3, Point3, Zero, Rotation3};
 
 /// A triangle mesh is a set of triangles that forms some sort of mesh. There
 /// are no requirements on the convexivity of the mesh.
+#[derive(Clone)]
 pub struct Mesh {
-    pub disp: Vector3<f32>,
-    pub verts: Vec<Vertex>,
+    pub x: Vector3<f32>,
+    pub verts: Vec<Point3<f32>>,
     pub faces: Vec<(usize, usize, usize)>,
     pub bvh: BVH<AABB, usize>, 
 }
@@ -40,7 +36,7 @@ pub struct Mesh {
 impl Mesh {
     pub fn new() -> Self {
         Mesh {
-            disp: Vector3::zero(),
+            x: Vector3::zero(),
             verts: Vec::new(),
             faces: Vec::new(),
             bvh: BVH::new(),
@@ -49,23 +45,23 @@ impl Mesh {
 
     pub fn with_capacity(cap_verts: usize, cap_faces: usize) -> Self {
         Mesh {
-            disp: Vector3::zero(),
+            x: Vector3::zero(),
             verts: Vec::with_capacity(cap_verts),
             faces: Vec::with_capacity(cap_faces),
             bvh: BVH::with_capacity(cap_faces),
         }
     }
 
-    pub fn push_vert(&mut self, v: Vertex) -> usize {
+    pub fn push_vert(&mut self, p: Point3<f32>) -> usize {
         let id = self.verts.len();
-        self.verts.push(v);
+        self.verts.push(p);
         id
     }
 
     pub fn push_face(&mut self, f: (usize, usize, usize)) -> usize {
-        let a = self.verts[f.0].p;
-        let b = self.verts[f.1].p;
-        let c = self.verts[f.2].p;
+        let a = self.verts[f.0];
+        let b = self.verts[f.1];
+        let c = self.verts[f.2];
         let tri = Triangle::from((a, b, c));
         let index = self.faces.len();
         self.faces.push(f);
@@ -76,19 +72,36 @@ impl Mesh {
 
 impl AddAssign<Vector3<f32>> for Mesh {
     fn add_assign(&mut self, v: Vector3<f32>) {
-        self.disp += v;
+        self.x += v;
     }
 }
 
 impl SubAssign<Vector3<f32>> for Mesh {
     fn sub_assign(&mut self, v: Vector3<f32>) {
-        self.disp -= v;
+        self.x -= v;
     }
 }
 
 impl Shape for Mesh {
     fn center(&self) -> Point3<f32> {
-        Point3::from_vec(self.disp)
+        Point3::from_vec(self.x)
+    }
+}
+
+/// Rotating meshes is not a fast operation.
+impl Volumetric for Mesh {
+    fn rotate<R: Rotation3<f32>>(mut self, rot: R) -> Mesh {
+        for vert in self.verts.iter_mut() {
+            *vert = rot.rotate_point(*vert);
+        }
+        self.bvh.clear();
+        for (i, &(a, b, c)) in self.faces.iter().enumerate() {
+            let tri = Triangle::from(
+                (self.verts[a], self.verts[b], self.verts[c])
+            );
+            self.bvh.insert(&tri, i);
+        }
+        self
     }
 }
 
@@ -98,11 +111,11 @@ where
 {
     fn contacts<F: FnMut(Contact)>(&self, rhs: &RHS, mut callback: F) -> bool {
         let mut collided = false;
-        self.bvh.query(&(rhs.bounds() - self.disp), |&face_index| {
+        self.bvh.query(&(rhs.bounds() - self.x), |&face_index| {
             let (a, b, c) = self.faces[face_index];
-            let a = self.verts[a].p + self.disp;
-            let b = self.verts[b].p + self.disp;
-            let c = self.verts[c].p + self.disp;
+            let a = self.verts[a] + self.x;
+            let b = self.verts[b] + self.x;
+            let c = self.verts[c] + self.x;
             let tri = Triangle::from((a, b, c));
             rhs.contacts(&tri, |c| {
                 collided = true;
@@ -117,22 +130,3 @@ where
         collided
     }
 }
-
-/*
-impl<Recv> LocalContacts<Mesh> for Recv
-where
-    Recv: Contacts<Mesh> + Delta
-{
-    fn local_contacts<F: FnMut(LocalContact)>(&self, rhs: &Mesh, mut callback: F) -> bool {
-        self.contacts(rhs, |c| {
-            let a_c = self.center() + self.delta() * c.t;
-            let b_c = rhs.center();
-            callback(LocalContact {
-                local_a: c.a + -a_c.to_vec(),
-                local_b: c.b + -b_c.to_vec(),
-                global: c
-            })
-        })
-    }
-}
-*/

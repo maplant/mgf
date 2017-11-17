@@ -14,6 +14,7 @@
 // along with MGF. If not, see <http://www.gnu.org/licenses/>.
 
 use std::f32;
+use std::slice::Iter;
 use cgmath::{InnerSpace, SquareMatrix, Matrix, Matrix3, Point3,
              Quaternion, Vector3, Zero};
 
@@ -69,7 +70,8 @@ impl Inertia for Component {
     }
 }
 
-
+/// A description of the physical state of an object minus linear and angular
+/// velocity.
 pub struct RigidBodyInfo {
     pub x: Point3<f32>,
     pub restitution: f32,
@@ -85,6 +87,7 @@ pub struct Velocity {
     pub angular: Vector3<f32>,
 }
 
+/// A vector of rigid bodies. 
 #[derive(Clone)]
 pub struct RigidBodyVec {
     pub x: Vec<Point3<f32>>,
@@ -102,10 +105,17 @@ pub struct RigidBodyVec {
     pub collider: Vec<Moving<Component>>,
 }
 
+/// A reference to an element of a RigidBodyVec.
 #[derive(Copy, Clone)]
 pub enum RigidBodyRef {
     Dynamic(usize),
     Static{ center: Point3<f32>, friction: f32 },
+}
+
+impl From<usize> for RigidBodyRef {
+    fn from(i: usize) -> RigidBodyRef {
+        RigidBodyRef::Dynamic(i)
+    }
 }
 
 impl Into<usize> for RigidBodyRef {
@@ -118,6 +128,7 @@ impl Into<usize> for RigidBodyRef {
 }
 
 impl RigidBodyVec {
+    /// Create an empty RigidBodyVec.
     pub fn new() -> Self {
         RigidBodyVec {
             x: Vec::new(),
@@ -136,6 +147,7 @@ impl RigidBodyVec {
         }
     }
 
+    /// Add a body to the rigid body. 
     pub fn add_body(&mut self, collider: Component, mass: f32, restitution: f32, friction: f32, world_force: Vector3<f32>) -> RigidBodyRef {
         let id = self.x.len();
         let (x, q, constructor) = collider.deconstruct();
@@ -156,6 +168,8 @@ impl RigidBodyVec {
         RigidBodyRef::Dynamic(id)
     }
 
+    /// Calculate the rotation, velocity, tensor, and collider for each rigid
+    /// body.
     pub fn integrate(&mut self, dt: f32) {
         unsafe { // ONLY for get_unchecked
             // Update rotation:
@@ -189,6 +203,14 @@ impl RigidBodyVec {
         }
     }
 
+    /// Return an iterator for the colliders of the rigid body.
+    #[inline(always)]
+    pub fn colliders(&self) -> Iter<Moving<Component>> {
+        self.collider.iter()
+    }
+
+    /// Finish all motion that was initiated at the beginning of the frame by
+    /// integrate.
     pub fn complete_motion(&mut self) {
         unsafe {
             // Update position from last time step:

@@ -22,39 +22,54 @@ use smallvec::SmallVec;
 use manifold::*;
 use physics::*;
 
-pub trait ConstrainedSet<Index, Constrained, Extra>
+/// A type that can be indexed and return some information.
+/// Constrained is information that can be returned and set, while Inspected
+/// is information that can only be returned.
+pub trait ConstrainedSet<Index, Constrained, Inspected>
 where
     Index: Copy
 {
-    fn get(&self, Index) -> (Constrained, Extra);
+    fn get(&self, Index) -> (Constrained, Inspected);
     fn set(&mut self, Index, Constrained);
 }
 
+/// A type that represents a constraint between some objects.
 pub trait Constraint {
+    /// A type used to index ConstrainedSets in order to retrieve information
+    /// on the objects being constrained.
     type Index: Copy;
+    /// A type representing values that are constrained by (and thus modified
+    /// by solving) the constraint.
     type Constrained;
-    type Extra;
+    /// A type representing extra information required to solve the constraint
+    /// that is not modified.
+    type Inspected;
 
     /// Solve the constraint.
-    fn solve<T: ConstrainedSet<Self::Index, Self::Constrained, Self::Extra>>(&mut self, &mut T);
+    fn solve<T: ConstrainedSet<Self::Index, Self::Constrained, Self::Inspected>>(&mut self, &mut T);
 }
 
+/// A generic constraint solver.
 pub struct Solver<C: Constraint> {
     constraints: SmallVec<[C; 10]>,
 }
 
 impl<C: Constraint> Solver<C> {
+    /// Creates a new constraint solver.
     pub fn new() -> Self {
         Solver {
             constraints: SmallVec::new(),
         }
     }
 
+    /// Adds a constraint to the solver.
     pub fn add_constraint(&mut self, constraint: C) {
         self.constraints.push(constraint);
     }
 
-    pub fn solve<T: ConstrainedSet<C::Index, C::Constrained, C::Extra>>(&mut self, cs: &mut T, iters: usize) {
+    /// Solves the constraints for the given ConstrainedSet by iterating the
+    /// given number of times.
+    pub fn solve<T: ConstrainedSet<C::Index, C::Constrained, C::Inspected>>(&mut self, cs: &mut T, iters: usize) {
         for _ in 0..iters {
             for constraint in self.constraints.iter_mut() {
                 constraint.solve(cs);
@@ -63,6 +78,7 @@ impl<C: Constraint> Solver<C> {
     }
 }
 
+/// A non-penetration constraint between two rigid bodies.
 pub struct ContactConstraint<Index, Params = DefaultContactConstraintParams>
 where
     Index: Copy,
@@ -81,6 +97,7 @@ where
     Index: Copy,
     Params: ContactConstraintParams
 {
+    /// Creates a new contact constraint.
     pub fn new<T: ConstrainedSet<Index, Velocity, RigidBodyInfo>>(pool: &T, obj_a: Index, obj_b: Index, manifold: Manifold, dt: f32) -> Self {
         let (
             Velocity { linear: va, angular: oa },
@@ -181,7 +198,7 @@ where
 {
     type Index = Index;
     type Constrained = Velocity;
-    type Extra = RigidBodyInfo;
+    type Inspected = RigidBodyInfo;
 
     fn solve<T: ConstrainedSet<Index, Velocity, RigidBodyInfo>>(&mut self, pool: &mut T) {
         let (
@@ -201,7 +218,8 @@ where
 
             // Calculate friction impulse
             for i in 0..2 {
-                let lambda = -dv.dot(self.manifold.tangent_vector[i]) * contact_state.tangent_mass[i];
+                let lambda = -dv.dot(self.manifold.tangent_vector[i])
+                    * contact_state.tangent_mass[i];
                 let max_lambda = self.friction * contact_state.normal_impulse;
                 let prev_impulse = contact_state.tangent_impulse[i];
                 contact_state.tangent_impulse[i] =
@@ -242,7 +260,6 @@ struct ContactState {
     tangent_mass: [f32; 2],
     tangent_impulse: [f32; 2],
 }
-
 
 /// A type that describes parameters used when solving contact constraints.
 pub trait ContactConstraintParams {

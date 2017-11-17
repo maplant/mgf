@@ -29,8 +29,6 @@ pub struct BVH<B: Bound, V> {
     pool: Pool<BVHNode<B, V>>,
 }
 
-
-
 struct BVHNode<B: Bound, V> {
     height: i32,
     parent: usize,
@@ -101,6 +99,12 @@ impl<B: Bound, V> BVH<B, V> {
     /// Determines if the BVH is empty.
     pub fn empty(&self) -> bool {
         self.pool.empty()
+    }
+
+    /// Removes all entries from the BVH.
+    pub fn clear(&mut self) {
+        self.root = 0;
+        self.pool.clear();
     }
 
 

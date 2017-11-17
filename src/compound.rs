@@ -36,6 +36,8 @@ pub enum Component {
 }
 
 impl Component {
+    /// Create a ComponentConstructor and return the position and rotation of
+    /// the Component.
     #[inline(always)]
     pub fn deconstruct(&self) -> (Point3<f32>, Quaternion<f32>, ComponentConstructor)  {
         match self {
@@ -52,10 +54,10 @@ impl Component {
 
 impl Volumetric for Component {
     #[inline(always)]
-    fn rotate<R: Rotation3<f32>>(&self, r: R) -> Self {
+    fn rotate<R: Rotation3<f32>>(self, r: R) -> Self {
         match self {
-            &Component::Sphere(ref s) => Component::Sphere(s.rotate(r)),
-            &Component::Capsule(ref c) => Component::Capsule(c.rotate(r)),
+            Component::Sphere(s) => Component::Sphere(s.rotate(r)),
+            Component::Capsule(c) => Component::Capsule(c.rotate(r)),
         }
     }
 }
@@ -198,6 +200,7 @@ impl LocalContacts<Moving<Component>> for Moving<Component> {
     }
 }
 
+/// A description of a Component minus rotation and position.
 #[derive(Copy, Clone, Debug)]
 pub enum ComponentConstructor {
     Sphere{ r: f32 },
@@ -206,6 +209,7 @@ pub enum ComponentConstructor {
 }
 
 impl ComponentConstructor {
+    /// Create a component from a component constructor.
     #[inline(always)]
     pub fn construct<R: Rotation3<f32>>(&self, p: Point3<f32>, rot: R) -> Component {
         match self {
