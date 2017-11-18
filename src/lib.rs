@@ -71,8 +71,8 @@
 //! let body_b = rigid_bodies.add_body(sphere, MASS, RESTITUTION, FRICTION, gravity);
 //!
 //! // Set the velocity for the objects.
-//! rigid_bodies.set(body_a, Velocity{ linear: Vector3::new(0.0, 4.0, 0.0), angular: Vector3::zero() });
-//! rigid_bodies.set(body_b, Velocity{ linear: Vector3::new(0.0, 4.0, 0.0), angular: Vector3::zero() });
+//! rigid_bodies.set(body_a, Velocity{ linear: Vector3::new(0.0,  4.0, 0.0), angular: Vector3::zero() });
+//! rigid_bodies.set(body_b, Velocity{ linear: Vector3::new(0.0, -4.0, 0.0), angular: Vector3::zero() });
 //!
 //! // Integrate the objects, creating colliders for each.
 //! rigid_bodies.integrate(TIMESTEP);
