@@ -432,14 +432,6 @@ macro_rules! commute_contacts {
     };
 }
 
-/*
-impl Contacts<> for  {
-    fn contacts<F: FnMut(Contact)>(&self, : &, mut callback: F) -> bool {
-
-    }
-}
-*/
-
 impl Contacts<Moving<Sphere>> for Plane {
     fn contacts<F: FnMut(Contact)>(&self, sphere: &Moving<Sphere>, mut callback: F) -> bool {
         let &Moving(s, v) = sphere;

@@ -130,3 +130,95 @@ where
         collided
     }
 }
+
+/// A closed convex mesh. Represented by a point soup.
+#[derive(Clone)]
+pub struct ConvexMesh {
+    pub x: Vector3<f32>,
+    pub sum: Vector3<f32>,
+    pub verts: Vec<Point3<f32>>,
+}
+
+impl ConvexMesh {
+    pub fn new() -> Self {
+        ConvexMesh {
+            x: Vector3::zero(),
+            sum: Vector3::zero(),
+            verts: vec![],
+        }
+    }
+
+    pub fn with_capacity(cap: usize) -> Self {
+        ConvexMesh {
+            x: Vector3::zero(),
+            sum: Vector3::zero(),
+            verts: Vec::with_capacity(cap),
+        }
+    }
+
+    pub fn push(&mut self, p: Point3<f32>) {
+        let prev_center = self.sum / self.verts.len() as f32;
+        self.sum += p.to_vec();
+        self.verts.push(p);
+        let new_center = self.sum / self.verts.len() as f32;
+        let disp = new_center - prev_center;
+        self.x += disp;
+    }
+}
+
+impl From<Vec<Point3<f32>>> for ConvexMesh {
+    fn from(verts: Vec<Point3<f32>>) -> Self {
+        let mut sum = Vector3::zero();
+        for p in verts.iter() {
+            sum += p.to_vec();
+        }
+        ConvexMesh {
+            x: Vector3::zero(),
+            sum,
+            verts,
+        }
+    }
+}
+
+impl AddAssign<Vector3<f32>> for ConvexMesh {
+    fn add_assign(&mut self, v: Vector3<f32>) {
+        self.x += v;
+    }
+}
+
+impl SubAssign<Vector3<f32>> for ConvexMesh {
+    fn sub_assign(&mut self, v: Vector3<f32>) {
+        self.x -= v;
+    }
+}
+
+impl Shape for ConvexMesh {
+    fn center(&self) -> Point3<f32> {
+        Point3::from_vec(self.x + self.sum / self.verts.len() as f32)
+    }
+}
+
+impl Volumetric for ConvexMesh {
+    fn rotate<R: Rotation3<f32>>(mut self, rot: R) -> ConvexMesh {
+        let center = self.sum / self.verts.len() as f32;
+        for vert in self.verts.iter_mut() {
+            *vert = rot.rotate_point(*vert + -center) + center;
+        }
+        self
+    }
+}
+
+impl Convex for ConvexMesh {
+    fn support(&self, d: Vector3<f32>) -> Point3<f32> {
+        let mut best_vert = self.verts[0];
+        let mut best_norm = self.verts[0].dot(dir);
+        for vert in self.verts[1..].iter() {
+            let norm = d.dot(vert.to_vec());
+            if norm > best_norm {
+                best_vert = vert;
+                best_norm = norm;
+            }
+        }
+        best_vert
+    }
+}

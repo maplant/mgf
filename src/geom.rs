@@ -827,6 +827,7 @@ impl Volumetric for AABB {
         AABB { c, r }
     }
 }
+
 impl Volumetric for Sphere {
     /// Rotation to a bounding sphere does nothing.
     #[inline(always)]
@@ -844,8 +845,23 @@ impl Volumetric for Capsule {
             ..self
         }
     }
-
 }
+
+/// A type that represents a convex volume.
+pub trait Convex : Volumetric {
+    /// Returns the point on the object that produces the greatest dot product
+    /// with the supplied axis. The axis is expected to be normalized.
+    // TODO: add an optional "initial" argument so that we can speed up the search.
+    fn support(&self, axis: Vector3<f32>) -> Point3<f32>;
+}
+
+impl Convex for Sphere {
+    fn support(&self, d: Vector3<f32>) -> Point3<f32> {
+        self.c + d * self.r
+    }
+}
+
+// TODO: Implement convex for AABB and Capsule.
 
 /// Computes an orthonormal basis from a given vector. This is usually used to
 /// produce tangent vectors for friction contacts.
