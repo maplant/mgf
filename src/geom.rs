@@ -16,7 +16,7 @@
 use std::f32;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
-use cgmath::{EuclideanSpace, InnerSpace, Point3, Rotation3, Vector3};
+use cgmath::{EuclideanSpace, InnerSpace, Rotation, Point3, Rotation3, Vector3, Quaternion};
 
 use collision;
 
@@ -79,10 +79,10 @@ impl From<Segment> for Ray {
         }
     }
 }
-
 /// Three points in space.
 #[derive(Copy, Clone, Debug)]
 pub struct Triangle {
+    // TODO: There's no point in making these Vectors. Horribly inconsistent.
     /// The first point in the triangle.
     pub a: Vector3<f32>,
     /// The second point in the triangle.
@@ -121,6 +121,25 @@ impl From<Triangle> for Plane {
     }
 }
 
+/// Four points in space forming a 3D geometry with four faces.
+pub struct Tetrahedron {
+    pub a: Vector3<f32>,
+    pub b: Vector3<f32>,
+    pub c: Vector3<f32>,
+    pub d: Vector3<f32>,
+}
+
+impl From<(Point3<f32>, Point3<f32>, Point3<f32>, Point3<f32>)> for Tetrahedron {
+    fn from(p: (Point3<f32>, Point3<f32>, Point3<f32>, Point3<f32>)) -> Self {
+        Tetrahedron {
+            a: p.0.to_vec(),
+            b: p.1.to_vec(),
+            c: p.2.to_vec(),
+            d: p.3.to_vec(),
+        }
+    }
+}
+
 /// A center point, two directions, and two half widths.
 #[derive(Copy, Clone)]
 pub struct Rectangle {
@@ -152,6 +171,14 @@ impl Into<Plane> for Rectangle {
 #[derive(Copy, Clone, Debug)]
 pub struct AABB {
     pub c: Point3<f32>,
+    pub r: Vector3<f32>,
+}
+
+/// An arbitrarily oriented bounding box.
+#[derive(Copy, Clone, Debug)]
+pub struct OBB {
+    pub c: Point3<f32>,
+    pub q: Quaternion<f32>,
     pub r: Vector3<f32>,
 }
 
@@ -230,7 +257,7 @@ impl<T: Shape> AsMut<T> for Moving<T> {
     }
 }
 
-/// An object with a positional derivative over a timestep
+/// An object with a positional derivative over a time step.
 pub trait Delta {
     fn delta(&self) -> Vector3<f32>;
 }
@@ -253,11 +280,52 @@ fn clamp(n: f32, min: f32, max: f32) -> f32 {
     }
 }
 
-/// Finds the result corresponding to the minimum distance between two objects.
-pub trait MinDistance<To = Point3<f32>, Result = Point3<f32>> {
-    fn min_dist(&self, &To) -> Result;
+pub fn closest_pts_seg(seg1: &Segment, seg2: &Segment) -> Option<(Point3<f32>, Point3<f32>)> {
+    let d1 = seg1.b - seg1.a;
+    let d2 = seg2.b - seg2.a;
+    let a = d1.magnitude2();
+    let e = d2.magnitude2();
+    let r = seg1.a - seg2.a;
+    let f = d2.dot(r);
+    let (s, t) = if a <= COLLISION_EPSILON {
+        if e <= COLLISION_EPSILON {
+            (0.5, 0.5)
+        } else {
+            (0.5, clamp(f / e, 0.0, 1.0))
+        }
+    } else {
+        let c = d1.dot(r);
+        if e <= COLLISION_EPSILON {
+            (clamp(-c / a, 0.0, 1.0), 0.0)
+        } else {
+            let b = d1.dot(d2);
+            let denom = a * e - b * b;
+            let s = if denom != 0.0 {
+                clamp((b * f - c * e) / denom, 0.0, 1.0)
+            } else {
+                return None;
+            };
+            let t = b * s + f;
+            if t < 0.0 {
+                (clamp(-c / a, 0.0, 1.0), 0.0)
+            } else if t > e {
+                (clamp((b - c) / a, 0.0, 1.0), 1.0)
+            } else {
+                (s, t / e)
+            }
+        }
+    };
+    Some((seg1.a + d1 * s, seg2.a + d2 * t))
 }
 
+/*
+pub trait Distance<RHS> {
+    fn distance(&self, RHS) -> f32;
+}
+*/
+
+
+/*
 impl MinDistance<Point3<f32>, f32> for Plane {
     /// Returns the smallest distance squared
     fn min_dist(&self, q: &Point3<f32>) -> f32 {
@@ -414,6 +482,12 @@ impl MinDistance<Point3<f32>> for Triangle {
     }
 }
 
+impl MinDistance<Point3<f32>> for Tetrahedron {
+    fn min_dist(&self, p: &Point3<f32>) -> Point3<f32> {
+
+    }
+}
+
 impl MinDistance<Point3<f32>> for Rectangle {
     /// Returns closest point on the rectangle to q
     fn min_dist(&self, q: &Point3<f32>) -> Point3<f32> {
@@ -453,6 +527,7 @@ impl MinDistance<Point3<f32>> for Capsule {
         unimplemented!();
     }
 }
+*/
 
 /// A type that describes a set of points in space.
 ///
@@ -471,9 +546,12 @@ pub trait Shape
         let disp = p - self.center();
         *self += disp;
     }
+
+    /// Returns the closest point on the shape to the given point.
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32>;
 }
 
-macro_rules! impl_shape {
+macro_rules! impl_shape_reqs {
     (
         $name:ident, $center:ident
     ) => {
@@ -499,11 +577,6 @@ macro_rules! impl_shape {
         impl SubAssign<Vector3<f32>> for $name {
             fn sub_assign(&mut self, v: Vector3<f32>) {
                 self.$center += -v
-            }
-        }
-        impl Shape for $name {
-            fn center(&self) -> Point3<f32> {
-                self.$center
             }
         }
     };
@@ -542,9 +615,29 @@ impl Shape for Plane {
     fn center(&self) -> Point3<f32> {
         Point3::from_vec(self.n * self.d)
     }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        to + -self.n * (self.n.dot(to.to_vec()) - self.d)
+    }
 }
 
-impl_shape!(Ray, p);
+impl_shape_reqs!(Ray, p);
+
+
+impl Shape for Ray {
+    fn center(&self) -> Point3<f32> {
+        self.p
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let p = (to - self.p).dot(self.d);
+        if p < 0.0 {
+            self.p
+        } else {
+            self.p + self.d * (p / self.d.magnitude2())
+        }
+    }
+}
 
 impl Add<Vector3<f32>> for Segment {
     type Output = Self;
@@ -579,6 +672,21 @@ impl SubAssign<Vector3<f32>> for Segment {
 impl Shape for Segment {
     fn center(&self) -> Point3<f32> {
         self.a + (self.b-self.a) * 0.5
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let ab = self.b - self.a;
+        let t = ab.dot(to - self.a);
+        if t <= 0.0 {
+            self.a
+        } else {
+            let denom = ab.dot(ab);
+            if t >= denom {
+                self.b
+            } else {
+                self.a + ab * (t / denom)
+            }
+        }
     }
 }
 
@@ -618,11 +726,161 @@ impl Shape for Triangle {
     fn center(&self) -> Point3<f32> {
         Point3::from_vec((self.a + self.b + self.c) / 3.0)
     }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let ab = self.b - self.a;
+        let ac = self.c - self.a;
+        let ap = to.to_vec() - self.a;
+        let d1 = ab.dot(ab);
+        let d2 = ac.dot(ap);
+        if d1 <= 0.0 && d2 <= 0.0 {
+            return Point3::from_vec(self.a);
+        }
+
+        let bp = to.to_vec() - self.b;
+        let d3 = ab.dot(bp);
+        let d4 = ac.dot(bp);
+        if d3 >= 0.0 && d4 <= d3 {
+            return Point3::from_vec(self.b);
+        }
+
+        let vc = d1 * d4 - d3 * d2;
+        if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+            let v = d1 / (d1 - d3);
+            return Point3::from_vec(self.a + ab * v);
+        }
+
+        let cp = to.to_vec() - self.c;
+        let d5 = ab.dot(cp);
+        let d6 = ac.dot(cp);
+        if d6 >= 0.0 && d5 <= d6 {
+            return Point3::from_vec(self.c);
+        }
+        let vb = d5 * d2 - d1 * d6;
+        if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+            let w = d2 / (d2 - d6);
+            return Point3::from_vec(self.a + ac * w);
+        }
+
+        let va = d3 * d6 - d5 * d4;
+        if va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0 {
+            let w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+            return Point3::from_vec(self.b + (self.c - self.b) * w);
+        }
+
+        let denom = 1.0 / (va + vb + vc);
+        let v = vb * denom;
+        let w = vc * denom;
+        Point3::from_vec(self.a + ab * v + ac * w)
+    }
 }
 
-impl_shape!(Rectangle, c);
-impl_shape!(AABB, c);
-impl_shape!(Sphere, c);
+/*
+impl Add<Vector3<f32>> for Tetrahedron {
+    type Output = Self;
+
+    fn add(self, v: Vector3<f32>) -> Tetrahedron {
+        Tetrahedron{ a: self.a + v, b: self.b + v, c: self.c + v, d: self.d + v }
+    }
+}
+
+impl Sub<Vector3<f32>> for Tetrahedron {
+    type Output = Self;
+
+    fn sub(self, v: Vector3<f32>) -> Tetrahedron {
+        Tetrahedron{ a: self.a - v, b: self.b - v, c: self.c - v, d: self.d - v }
+    }
+}
+
+impl AddAssign<Vector3<f32>> for Tetrahedron {
+    fn add_assign(&mut self, v: Vector3<f32>) {
+        self.a += v;
+        self.b += v;
+        self.c += v;
+        self.d += v;
+    }
+}
+
+impl SubAssign<Vector3<f32>> for Tetrahedron {
+    fn sub_assign(&mut self, v: Vector3<f32>) {
+        self.a -= v;
+        self.b -= v;
+        self.c -= v;
+        self.d -= v;
+    }
+}
+
+impl Shape for Tetrahedron {
+    fn center(&self) -> Point3<f32> {
+        Point3::from_vec((self.a + self.b + self.c + self.d) / 4.0)
+    }
+}
+*/
+
+impl_shape_reqs!(Rectangle, c);
+
+impl Shape for Rectangle {
+    fn center(&self) -> Point3<f32> {
+        self.c
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let d = to - self.c;
+        let mut q = self.c;
+        for i in 0..2 {
+            let dist = d.dot(self.u[i]);
+            q = q + self.u[i] * clamp(dist, -self.e[i], self.e[i]);
+        }
+        q
+    }
+}
+
+impl_shape_reqs!(AABB, c);
+
+impl Shape for AABB {    
+    fn center(&self) -> Point3<f32> {
+        self.c
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        Point3::new(
+            clamp(to.x, self.c.x - self.r.x, self.c.x + self.r.x),
+            clamp(to.y, self.c.y - self.r.y, self.c.y + self.r.y),
+            clamp(to.z, self.c.z - self.r.z, self.c.z + self.r.z),
+        )
+    }
+}
+
+impl_shape_reqs!(OBB, c);
+
+impl Shape for OBB {    
+    fn center(&self) -> Point3<f32> {
+        self.c
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let to = self.q.invert().rotate_point(to);
+        Point3::new(
+            clamp(to.x, self.c.x - self.r.x, self.c.x + self.r.x),
+            clamp(to.y, self.c.y - self.r.y, self.c.y + self.r.y),
+            clamp(to.z, self.c.z - self.r.z, self.c.z + self.r.z),
+        )
+    }
+}
+
+impl_shape_reqs!(Sphere, c);
+
+impl Shape for Sphere {
+    fn center(&self) -> Point3<f32> {
+        self.c
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let d = to - self.c;
+        let rat = d.magnitude2() / (self.r * self.r);
+        self.c + d * rat
+    }
+}
 
 impl Add<Vector3<f32>> for Capsule {
     type Output = Self;
@@ -655,6 +913,12 @@ impl SubAssign<Vector3<f32>> for Capsule {
 impl Shape for Capsule {
     fn center(&self) -> Point3<f32> {
         self.a + self.d * 0.5
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let seg = Segment::from((self.a, self.a + self.d));
+        let sphere = Sphere{ c: seg.closest_point(to), r: self.r };
+        sphere.closest_point(to)
     }
 }
 
@@ -828,6 +1092,18 @@ impl Volumetric for AABB {
     }
 }
 
+impl Volumetric for OBB {
+    #[inline(always)]
+    fn rotate<R: Rotation3<f32>>(self, rot: R) -> Self {
+        let q: Quaternion<f32> = rot.into();
+        OBB {
+            c: self.c,
+            q: q * self.q,
+            r: self.r,
+        }
+    }
+}
+
 impl Volumetric for Sphere {
     /// Rotation to a bounding sphere does nothing.
     #[inline(always)]
@@ -855,13 +1131,33 @@ pub trait Convex : Volumetric {
     fn support(&self, axis: Vector3<f32>) -> Point3<f32>;
 }
 
+impl Convex for AABB {
+    fn support(&self, d: Vector3<f32>) -> Point3<f32> {
+        Point3::new(
+            d.x.signum() * self.r.x,
+            d.y.signum() * self.r.y,
+            d.z.signum() * self.r.z
+        ) + self.c.to_vec()
+    }
+}
+
+impl Convex for OBB {
+    fn support(&self, d: Vector3<f32>) -> Point3<f32> {
+        let d = self.q.invert().rotate_vector(d);
+        Point3::new(
+            d.x.signum() * self.r.x,
+            d.y.signum() * self.r.y,
+            d.z.signum() * self.r.z
+        ) + self.c.to_vec()
+    }
+}
+
 impl Convex for Sphere {
     fn support(&self, d: Vector3<f32>) -> Point3<f32> {
         self.c + d * self.r
     }
 }
 
-// TODO: Implement convex for AABB and Capsule.
 
 /// Computes an orthonormal basis from a given vector. This is usually used to
 /// produce tangent vectors for friction contacts.

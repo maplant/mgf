@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with MGF. If not, see <http://www.gnu.org/licenses/>.
 
+use std::f32;
 use std::vec::Vec;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use cgmath::prelude::*;
@@ -119,6 +120,13 @@ impl Shape for Component {
         match self {
             &Component::Sphere(s) => s.center(),
             &Component::Capsule(c) => c.center(),
+        }
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        match self {
+            &Component::Sphere(s) => s.closest_point(to),
+            &Component::Capsule(c) => c.closest_point(to),
         }
     }
 }
@@ -284,6 +292,20 @@ impl Shape for Compound {
     /// the mass of individual components.
     fn center(&self) -> Point3<f32> {
         Point3::from_vec(self.disp)
+    }
+
+    fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
+        let mut best_p = Point3::new(0.0, 0.0, 0.0);
+        let mut best_dist: f32 = f32::INFINITY;
+        for shape in self.shapes.iter() {
+            let new_p = self.bvh.get_leaf(*shape).closest_point(to);
+            let new_dist = (to - new_p).magnitude2();
+            if new_dist < best_dist {
+                best_p = new_p;
+                best_dist = new_dist;
+            }
+        }
+        best_p
     }
 }
 

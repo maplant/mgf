@@ -264,6 +264,14 @@ impl<B: Bound, V> BVH<B, V> {
         self.root
     }
 
+    pub fn get_leaf(&self, i: usize) -> &V {
+        if let &BVHNodeType::Leaf(ref leaf) = &self.pool[i].node_type {
+            leaf
+        } else {
+            panic!("node at index {} is not a leaf", i);
+        }
+    }
+
     /// Finds each entry in the BVH that has a bound that overlaps the bound of
     /// the passed object. Performs a depth first search for all objects.
     ///

@@ -147,3 +147,5 @@ pub use physics::*;
 mod pool;
 pub use pool::*;
 
+mod simplex;
+pub use simplex::*;

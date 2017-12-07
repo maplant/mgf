@@ -86,6 +86,10 @@ impl Shape for Mesh {
     fn center(&self) -> Point3<f32> {
         Point3::from_vec(self.x)
     }
+
+    fn closest_point(&self, _to: Point3<f32>) -> Point3<f32> {
+        unimplemented!();
+    }
 }
 
 /// Rotating meshes is not a fast operation.
@@ -196,6 +200,10 @@ impl Shape for ConvexMesh {
     fn center(&self) -> Point3<f32> {
         Point3::from_vec(self.x + self.sum / self.verts.len() as f32)
     }
+
+    fn closest_point(&self, _to: Point3<f32>) -> Point3<f32> {
+        unimplemented!();
+    }
 }
 
 impl Volumetric for ConvexMesh {
@@ -211,11 +219,11 @@ impl Volumetric for ConvexMesh {
 impl Convex for ConvexMesh {
     fn support(&self, d: Vector3<f32>) -> Point3<f32> {
         let mut best_vert = self.verts[0];
-        let mut best_norm = self.verts[0].dot(dir);
+        let mut best_norm = d.dot(self.verts[0].to_vec());
         for vert in self.verts[1..].iter() {
             let norm = d.dot(vert.to_vec());
             if norm > best_norm {
-                best_vert = vert;
+                best_vert = *vert;
                 best_norm = norm;
             }
         }

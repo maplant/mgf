@@ -361,6 +361,8 @@ impl<P: Particle> Intersects<Moving<Sphere>> for P {
     }
 }
 
+/// A discrete point of contact between two objects.
+///
 
 /// A point of contact between two objects occuring during a timestep.
 ///
@@ -553,7 +555,7 @@ impl<Poly: Polygon> Contacts<Moving<Sphere>> for Poly {
                 if let Some(i) = ray.intersection(&c) {
                     if i.t <= 1.0 && i.t < first_t {
                         first_t = i.t;
-                        tri_p = Segment::from((v1, v2)).min_dist(&i.p);
+                        tri_p = Segment::from((v1, v2)).closest_point(i.p);
                     }
                 }
             }
@@ -856,7 +858,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
                     continue;
                 }
                 let tri_p: Point3<f32> =
-                    Segment::from((edge_a, edge_b)).min_dist(&inter.p);
+                    Segment::from((edge_a, edge_b)).closest_point(inter.p);
 
                 let m_proj = ((tri_p + c.d) - edge_a).magnitude2();
                 let c_t = if  m_proj > m_edge {
@@ -876,7 +878,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
                 let capsule_t = -d.dot(c.d) / c.d.magnitude2();
                 let tri_p: Point3<f32> =
                     Segment::from((edge_a, edge_a + -c.d))
-                    .min_dist(&inter.p);
+                    .closest_point(inter.p);
                 let a = tri_p + c.d * capsule_t;
                 let m_proj = ((tri_p + c.d) - edge_a).magnitude2();
                 let b = if m_proj > m_edge {
@@ -940,7 +942,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
                     if let Some(inter) = ray.intersection(&bottom_edge) {
                         if inter.t <= 1.0 && inter.t <= best_sum.0 {
                             let q: Point3<f32> = Segment::from((edge_a, edge_b))
-                                .min_dist(&inter.p);
+                                .closest_point(inter.p);
                             best_sum = (inter.t, q);
                         }
                     }
@@ -953,7 +955,7 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
                         if inter.t <= 1.0 && inter.t <= best_sum.0 {
                             let plane_p = inter.p + c.d;
                             let q: Point3<f32> = Segment::from((edge_a, edge_b))
-                                .min_dist(&plane_p);
+                                .closest_point(plane_p);
                             best_sum = (inter.t, q);
                         }
                     }
@@ -1069,7 +1071,7 @@ impl Contacts<Moving<Sphere>> for Capsule {
         // Check if capsule and sphere are already overlapping
         let r = self.r + s.r;
         let closest_pt: Point3<f32> =
-            Segment::from((self.a, self.a + self.d)).min_dist(&s.c);
+            Segment::from((self.a, self.a + self.d)).closest_point(s.c);
         let d = s.c - closest_pt;
         let len = d.magnitude2();
         if len <= r * r {
@@ -1102,7 +1104,7 @@ impl Contacts<Moving<Sphere>> for Capsule {
         if let Some(intersect) = ray.intersection(&Capsule{ r: s.r + self.r, ..*self }) {
             if intersect.t <= 1.0 {
                 let b = s.c + v * intersect.t;
-                let a: Point3<f32> = Segment::from(*self).min_dist(&b);
+                let a: Point3<f32> = Segment::from(*self).closest_point(b);
                 let ba = (b - a).normalize();
                 let q = a + ba * self.r;
                 callback(Contact {
@@ -1126,9 +1128,11 @@ impl Contacts<Moving<Capsule>> for Capsule {
         let &Moving(c, v) = capsule;
         let self_seg: Segment = (self.a, self.a + self.d).into();
         let (p1, p2) = if let Some((p,_)) = 
-            self_seg.min_dist(&Segment::from((c.a, c.a + v)))
+            closest_pts_seg(&self_seg, &Segment::from((c.a, c.a + v)))
         {
-            if let Some((e, _)) = self_seg.min_dist(&Segment::from((c.a + c.d, c.a + c.d + v))) {
+            if let Some((e, _)) =
+                closest_pts_seg(&self_seg, &Segment::from((c.a + c.d, c.a + c.d + v)))
+            {
                 (p, e)
             } else {
                 return false;
@@ -1137,7 +1141,9 @@ impl Contacts<Moving<Capsule>> for Capsule {
             (self.a, self.a + self.d)
         };
         let self_seg: Segment = (p1, p2).into();
-        if let Some((q, _)) = self_seg.min_dist(&Segment::from((c.a, c.a + c.d))) {
+        if let Some((q, _)) =
+            closest_pts_seg(&self_seg, &Segment::from((c.a, c.a + c.d)))
+        {
             let ss = Sphere {
                 c: q,
                 r: self.r,
