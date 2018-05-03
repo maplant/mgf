@@ -6,6 +6,7 @@ use cgmath::{EuclideanSpace, InnerSpace, Point2, Point3, Quaternion,  Rotation,
 
 use bitset::FixedSizeBitSet;
 use geom::*;
+use simplex::*;
 
 /// A type that can overlap another.
 ///
@@ -362,7 +363,55 @@ impl<P: Particle> Intersects<Moving<Sphere>> for P {
 }
 
 /// A discrete point of contact between two objects.
-///
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Penetration {
+    pub a: Point3<f32>,
+    pub b: Point3<f32>,
+    pub n: Vector3<f32>,
+}
+
+impl Neg for Penetration {
+    type Output = Penetration;
+
+    /// Negate the normal and swap contact points.
+    fn neg(self) -> Self {
+        Penetration {
+            a: self.b,
+            b: self.a,
+            n: -self.n,
+        }
+    }
+}
+
+/// A type that can penetrate another.
+pub trait Penetrates<RHS> {
+    // TODO: Add an initial axis to test
+    /// Returns the minimum distance between the two object if they are not
+    /// penetrating.
+    fn seperation(&self, rhs: &RHS) -> Option<f32>;
+}
+
+impl<ShapeA, ShapeB> Penetrates<ShapeB> for ShapeA
+where
+    ShapeA: Convex + Volumetric,
+    ShapeB: Convex + Volumetric,
+{
+    fn seperation(&self, rhs: &ShapeB) -> Option<f32> {
+        let d = Vector3::new(1.0, 0.0, 0.0);
+        let diff = MinkowskiDiff {
+            s1: self,
+            s2: rhs,
+        };
+        let mut simp = Simplex::from(diff.support(d));
+        let min_dist = simp.closest_point_to_origin(&diff).to_vec();
+        let mag2 = min_dist.magnitude2();
+        if mag2 < COLLISION_EPSILON {
+            None
+        } else {
+            Some(mag2.sqrt())
+        }
+    }
+}
 
 /// A point of contact between two objects occuring during a timestep.
 ///
@@ -385,7 +434,7 @@ pub struct Contact {
 impl Neg for Contact {
     type Output = Contact;
 
-    /// Negate the normal and swap contact points
+    /// Negate the normal and swap contact points.
     fn neg(self) -> Self {
         Contact {
             a: self.b,
@@ -1563,6 +1612,34 @@ mod tests {
         use geom;
         use geom::{Moving, Sphere, Rect, Triangle};
         use collision::*;
+
+        #[test]
+        fn test_sphere_penetration() {
+            let s1 = Sphere {
+                c: Point3::new(0.0, 0.0, 0.0),
+                r: 1.0,
+            };
+            let s2 = Sphere {
+                c: Point3::new(2.0, 0.0, 0.0),
+                r: 1.5,
+            };
+            assert_eq!(
+                s1.seperation(&s2),
+                None
+            );
+            assert_eq!(
+                s2.seperation(&s1),
+                None
+            );
+            let s2 = Sphere {
+                c: Point3::new(2.0, 0.0, 0.0),
+                r: 0.75,
+            };
+            assert_eq!(
+                s1.seperation(&s2),
+                Some(0.25)
+            );
+        }
 
         #[test]
         fn test_moving_spheres_collision() {

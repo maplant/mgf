@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file, following
 the format defined at [keepachangelog.com](http://keepachangelog.com/).
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [v1.1.0] - 2018-04-02
+
+A lot of work went into adding support for discrete collision detection. It is 
+not feature complete and not very well tested but the basic algorithm works fine.
+
+For now, only seperation can be queried (and thus if two objects are penetrating). 
+In the future contact generation will be added.
+
+- Added `Penetrates` trait to query the seperation between two shapes.
+- Added `Convex` trait to query the support function of a shape.
+- Added `MinkowskiDiff` object to construct the Minkowski difference of two shapes.
+- Added `Simplex` struct to facilitate in GJK
+
 ## [v1.0.0] - 2017-11-20
 
 Although there have been breaking changes between minor versions in the past,

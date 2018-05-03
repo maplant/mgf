@@ -1124,7 +1124,7 @@ impl Volumetric for Capsule {
 }
 
 /// A type that represents a convex volume.
-pub trait Convex : Volumetric {
+pub trait Convex {
     /// Returns the point on the object that produces the greatest dot product
     /// with the supplied axis. The axis is expected to be normalized.
     // TODO: add an optional "initial" argument so that we can speed up the search.
@@ -1158,6 +1158,24 @@ impl Convex for Sphere {
     }
 }
 
+pub struct MinkowskiDiff<'a, 'b, S1, S2>
+where
+    S1: Convex + 'a,
+    S2: Convex + 'b 
+{
+    pub s1: &'a S1,
+    pub s2: &'b S2,
+}
+
+impl<'a, 'b, 'c, 'd, S1, S2> Convex for MinkowskiDiff<'a, 'b, S1, S2>
+where
+    S1: Convex + 'a,
+    S2: Convex + 'b,
+{
+    fn support(&self, axis: Vector3<f32>) -> Point3<f32> {
+        Point3::from_vec(self.s1.support(axis).to_vec() - self.s2.support(-axis).to_vec())
+    }
+}
 
 /// Computes an orthonormal basis from a given vector. This is usually used to
 /// produce tangent vectors for friction contacts.
