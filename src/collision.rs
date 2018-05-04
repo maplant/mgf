@@ -388,7 +388,7 @@ pub trait Penetrates<RHS> {
     // TODO: Add an initial axis to test
     /// Returns the minimum distance between the two object if they are not
     /// penetrating.
-    fn seperation(&self, rhs: &RHS) -> Option<f32>;
+    fn separation(&self, rhs: &RHS) -> Option<f32>;
 }
 
 impl<ShapeA, ShapeB> Penetrates<ShapeB> for ShapeA
@@ -396,7 +396,7 @@ where
     ShapeA: Convex + Volumetric,
     ShapeB: Convex + Volumetric,
 {
-    fn seperation(&self, rhs: &ShapeB) -> Option<f32> {
+    fn separation(&self, rhs: &ShapeB) -> Option<f32> {
         let d = Vector3::new(1.0, 0.0, 0.0);
         let diff = MinkowskiDiff {
             s1: self,
@@ -1624,11 +1624,11 @@ mod tests {
                 r: 1.5,
             };
             assert_eq!(
-                s1.seperation(&s2),
+                s1.separation(&s2),
                 None
             );
             assert_eq!(
-                s2.seperation(&s1),
+                s2.separation(&s1),
                 None
             );
             let s2 = Sphere {
@@ -1636,7 +1636,7 @@ mod tests {
                 r: 0.75,
             };
             assert_eq!(
-                s1.seperation(&s2),
+                s1.separation(&s2),
                 Some(0.25)
             );
         }
