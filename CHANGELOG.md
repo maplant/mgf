@@ -9,10 +9,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 A lot of work went into adding support for discrete collision detection. It is 
 not feature complete and not very well tested but the basic algorithm works fine.
 
-For now, only seperation can be queried (and thus if two objects are penetrating). 
+For now, only separation can be queried (and thus if two objects are penetrating). 
 In the future contact generation will be added.
 
-- Added `Penetrates` trait to query the seperation between two shapes.
+- Added `Penetrates` trait to query the separation between two shapes.
 - Added `Convex` trait to query the support function of a shape.
 - Added `MinkowskiDiff` object to construct the Minkowski difference of two shapes.
 - Added `Simplex` struct to facilitate in GJK
