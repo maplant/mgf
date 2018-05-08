@@ -67,6 +67,6 @@ be sure to include unit tests.
 ## License 
 
 The open source version of MGF is available with the GNU GPL version 3 license.
-This license is quite iconvenient for game programming, so if you would like to request
+This license is quite inconvenient for game programming, so if you would like to request
 a custom license for your comercial product please contact `map@maplant.com` and we can
 assign you a custom license free of charge.
