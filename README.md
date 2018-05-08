@@ -38,6 +38,9 @@ on providing fast and accurate exact collision detection for moving geometries
 commonly found in games, such as `Spheres` and `Capsules`, and does not and cannot
 provide fast and accurate moving mesh on mesh collisions.
 
+As of version 1.1, MGF provides a limited form of GJK discrete collision detection, 
+although in its current form it is quite limited.
+
 ## Things to keep in mind
 
 One interesting result of the implementation is that the direction of the normal
