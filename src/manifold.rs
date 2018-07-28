@@ -43,7 +43,7 @@ pub struct ContactPruner<Params = DefaultPruningParams>
 where
     Params: PruningParams
 {
-    min_coll_time: f32,
+    min_col_time: f32,
     contacts: SmallVec<[LocalContact; 4]>,
     params: PhantomData<Params>,
 }
@@ -51,7 +51,7 @@ where
 impl<Params: PruningParams> ContactPruner<Params> {
     pub fn new() -> Self {
         ContactPruner {
-            min_coll_time: f32::INFINITY,
+            min_col_time: f32::INFINITY,
             contacts: SmallVec::new(),
             params: PhantomData,
         }
@@ -59,7 +59,7 @@ impl<Params: PruningParams> ContactPruner<Params> {
 
     pub fn with_capacity(cap: usize) -> Self {
         ContactPruner {
-            min_coll_time: f32::INFINITY,
+            min_col_time: f32::INFINITY,
             contacts: SmallVec::with_capacity(cap),
             params: PhantomData,
         }
@@ -70,14 +70,14 @@ impl<Params: PruningParams> ContactPruner<Params> {
     /// If two contact points are too close to each other, the furthest from the
     /// center of the geometries is chosen. 
     pub fn push(&mut self, new_contact: LocalContact) {
-        if new_contact.global.t < self.min_coll_time - COLLISION_EPSILON {
+        if new_contact.global.t < self.min_col_time - COLLISION_EPSILON {
             // If the collision occurs earlier then the collisions in this manifold,
             // it is the preferred collision.
             self.contacts.clear();
             self.contacts.push(new_contact);
-            self.min_coll_time = new_contact.global.t;
+            self.min_col_time = new_contact.global.t;
             return;
-        } else if new_contact.global.t > self.min_coll_time + COLLISION_EPSILON {
+        } else if new_contact.global.t > self.min_col_time + COLLISION_EPSILON {
             return;
         }
         for old_contact in self.contacts.iter_mut() {
@@ -102,7 +102,7 @@ impl<Params: PruningParams> ContactPruner<Params> {
     }
 
     pub fn clear(&mut self) {
-        self.min_coll_time = f32::INFINITY;
+        self.min_col_time = f32::INFINITY;
         self.contacts.clear();
     }
 }
@@ -139,7 +139,7 @@ impl<P: PruningParams> From<ContactPruner<P>> for Manifold {
                       sum + lc.global.n
                   }) / (pruner.contacts.len() as f32);
         Manifold {
-            time: pruner.min_coll_time,
+            time: pruner.min_col_time,
             normal: avg_normal,
             tangent_vector: compute_basis(&avg_normal),
             contacts
