@@ -278,7 +278,6 @@ impl ContactConstraintParams for DefaultContactConstraintParams {
     const BAUMGARTE: f32 = 0.2;
 }
 
-#[inline(always)]
 fn clamp(n: f32, min: f32, max: f32) -> f32 {
     if n < min {
         min

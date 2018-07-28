@@ -269,7 +269,6 @@ impl<T: Shape> Delta for Moving<T> {
 }
 
 
-#[inline(always)]
 fn clamp(n: f32, min: f32, max: f32) -> f32 {
     if n < min {
         min
@@ -999,7 +998,6 @@ impl Polygon for Triangle {
         Point3::from_vec([self.a, self.b, self.c][i])
     }
 
-    #[inline(always)]
     fn edge(&self, i: usize) -> (usize, usize) {
         [(0, 1), (1, 2), (2, 0)][i]
     }
@@ -1022,7 +1020,6 @@ impl Polygon for Rectangle {
         }
     }
 
-    #[inline(always)]
     fn edge(&self, i: usize) -> (usize, usize) {
         [(0, 1), (1, 2), (2, 3), (3, 0)][i]
     }
@@ -1036,7 +1033,6 @@ pub trait Volumetric : Shape + Clone {
     fn rotate<R: Rotation3<f32>>(self, r: R) -> Self;
 
     /// Rotates the object around a point.
-    #[inline(always)]
     fn rotate_about<R: Rotation3<f32>>(mut self, r: R, p: Point3<f32>) -> Self {
         let center = self.center();
         self.set_pos(p + r.rotate_vector(center - p));
@@ -1093,7 +1089,6 @@ impl Volumetric for AABB {
 }
 
 impl Volumetric for OBB {
-    #[inline(always)]
     fn rotate<R: Rotation3<f32>>(self, rot: R) -> Self {
         let q: Quaternion<f32> = rot.into();
         OBB {
@@ -1106,14 +1101,12 @@ impl Volumetric for OBB {
 
 impl Volumetric for Sphere {
     /// Rotation to a bounding sphere does nothing.
-    #[inline(always)]
     fn rotate<R: Rotation3<f32>>(self, _: R) -> Sphere {
         self
     }
 }
 
 impl Volumetric for Capsule {
-    #[inline(always)]
     fn rotate<R: Rotation3<f32>>(self, r: R) -> Self {
         Capsule {
             a: self.center() + r.rotate_vector(self.a - self.center()),

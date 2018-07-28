@@ -37,7 +37,6 @@ macro_rules! impl_bit_set {
         impl FixedSizeBitSet for $type {
             const NUM_BITS: usize = $num_bits;
 
-            #[inline(always)]
             fn get(&self, i: usize) -> bool {
                 if i >= Self::NUM_BITS {
                     panic!("index is out of bounds: the len is {} but the index is {}",
@@ -46,7 +45,6 @@ macro_rules! impl_bit_set {
                 (*self >> i & 0b_1) == 1
             }
 
-            #[inline(always)]
             fn insert(&mut self, i: usize) {
                 if i >= Self::NUM_BITS {
                     panic!("index is out of bounds: the len is {} but the index is {}",
@@ -55,7 +53,6 @@ macro_rules! impl_bit_set {
                 *self |= 1 << i;
             }
 
-            #[inline(always)]
             fn remove(&mut self, i: usize) {
                 if i >= Self::NUM_BITS {
                     panic!("index is out of bounds: the len is {} but the index is {}",

@@ -51,7 +51,6 @@ pub trait BoundedBy<B: Bound> {
 
 /// All geometries that satisfy Bound are bounded by themselves.
 impl<B: Bound> BoundedBy<B> for B {
-    #[inline(always)]
     fn bounds(&self) -> B {
         *self
     }
@@ -247,7 +246,6 @@ impl Bound for Sphere {
         }
     }
 
-    #[inline(always)]
     fn surface_area(&self) -> f32 {
         self.r * self.r
     }

@@ -492,7 +492,6 @@ impl<B, V> BoundedBy<B> for BVH<B, V>
 where
     B: Bound
 {
-    #[inline(always)]
     fn bounds(&self) -> B {
         if self.empty() {
             panic!("BVH is empty and thus has no bounds");

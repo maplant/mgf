@@ -176,7 +176,6 @@ where
     }
 }
 
-#[inline(always)]
 fn filter_pool<'a, T>(item: &'a PoolEntry<T>) -> Option<&'a T> {
     if let &PoolEntry::Occupied(ref item) = item {
         Some(item)
@@ -194,7 +193,6 @@ impl<'a, T> IntoIterator for &'a Pool<T> {
     }
 }
 
-#[inline(always)]
 fn filter_pool_mut<'a, T>(item: &'a mut PoolEntry<T>) -> Option<&'a mut T> {
     if let &mut PoolEntry::Occupied(ref mut item) = item {
         Some(item)

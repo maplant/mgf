@@ -22,7 +22,7 @@ use compound::*;
 use geom::*;
 use solver::*;
 
-/// An type that has a moment of inertia tensor.
+/// Any type that has a moment of inertia tensor.
 pub trait Inertia {
     fn tensor(&self, m: f32) -> Matrix3<f32>;
 }
@@ -90,19 +90,19 @@ pub struct Velocity {
 /// A vector of rigid bodies. 
 #[derive(Clone)]
 pub struct RigidBodyVec {
-    pub x: Vec<Point3<f32>>,
-    pub q: Vec<Quaternion<f32>>,
-    pub v: Vec<Vector3<f32>>,
-    pub omega: Vec<Vector3<f32>>,
-    pub force: Vec<Vector3<f32>>,
-    pub torque: Vec<Vector3<f32>>,
-    pub restitution: Vec<f32>,
-    pub friction: Vec<f32>,
-    pub inv_mass: Vec<f32>,
-    pub inv_moment_body: Vec<Matrix3<f32>>,
+    x: Vec<Point3<f32>>,
+    q: Vec<Quaternion<f32>>,
+    v: Vec<Vector3<f32>>,
+    omega: Vec<Vector3<f32>>,
+    force: Vec<Vector3<f32>>,
+    torque: Vec<Vector3<f32>>,
+    restitution: Vec<f32>,
+    friction: Vec<f32>,
+    inv_mass: Vec<f32>,
+    inv_moment_body: Vec<Matrix3<f32>>,
     inv_moment: Vec<Matrix3<f32>>,
     constructor: Vec<ComponentConstructor>,
-    pub collider: Vec<Moving<Component>>,
+    collider: Vec<Moving<Component>>,
 }
 
 /// A reference to an element of a RigidBodyVec.
@@ -204,7 +204,6 @@ impl RigidBodyVec {
     }
 
     /// Return an iterator for the colliders of the rigid body.
-    #[inline(always)]
     pub fn colliders(&self) -> Iter<Moving<Component>> {
         self.collider.iter()
     }
@@ -222,7 +221,6 @@ impl RigidBodyVec {
 }
 
 impl ConstrainedSet<RigidBodyRef, Velocity, RigidBodyInfo> for RigidBodyVec {
-    #[inline(always)]
     fn get(&self, i: RigidBodyRef) -> (Velocity, RigidBodyInfo) {
         match i {
             RigidBodyRef::Dynamic(i) =>
@@ -256,7 +254,6 @@ impl ConstrainedSet<RigidBodyRef, Velocity, RigidBodyInfo> for RigidBodyVec {
         }
     }
 
-    #[inline(always)]
     fn set(&mut self, i: RigidBodyRef, v: Velocity) {
         match i {
             RigidBodyRef::Dynamic(i) => {

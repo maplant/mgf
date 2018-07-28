@@ -29,7 +29,6 @@ impl Overlaps<AABB> for AABB {
 }
 
 impl Overlaps<Sphere> for AABB {
-    #[inline(always)]
     fn overlaps(&self, rhs: &Sphere) -> bool {
         rhs.overlaps(self)
     }
@@ -1324,7 +1323,6 @@ impl Contacts<Moving<Capsule>> for Capsule {
     }
 }
 
-#[inline(always)]
 fn clamp(n: f32, min: f32, max: f32) -> f32 {
     if n < min {
         min
