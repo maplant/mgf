@@ -15,22 +15,26 @@
 
 use std::f32;
 use std::fmt;
+use std::mem;
+use std::collections::HashMap;
 
 use cgmath::prelude::*;
 use cgmath::{EuclideanSpace, InnerSpace, Point3, Vector3};
 use geom::*;
+use collision::*;
+use pool::*;
 
-pub struct Simplex<Support = Point3<f32>>
+pub struct Simplex<Point = Point3<f32>>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    points: [Support; 4],
-    state: &'static SimplexState<Support>,
+    points: [Point; 4],
+    state: &'static SimplexState<Point>,
 }
 
-impl<Support> fmt::Debug for Simplex<Support>
+impl<Point> fmt::Debug for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static + fmt::Debug
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static + fmt::Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         #[derive(Debug)]
@@ -53,98 +57,98 @@ where
     }
 }
 
-impl<Support> From<[Support; 1]> for Simplex<Support>
+impl<Point> From<[Point; 1]> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static 
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static 
 {
-    fn from(p: [Support; 1]) -> Self {
+    fn from(p: [Point; 1]) -> Self {
         Self::from(p[0])
     }
 }
           
-impl<Support> From<Support> for Simplex<Support>
+impl<Point> From<Point> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    fn from(p: Support) -> Self {
+    fn from(p: Point) -> Self {
         Simplex {
             points: [
                 p,
-                Support::from(Point3::new(0.0, 0.0, 0.0)),
-                Support::from(Point3::new(0.0, 0.0, 0.0)),
-                Support::from(Point3::new(0.0, 0.0, 0.0)),
+                Point::from(Point3::new(0.0, 0.0, 0.0)),
+                Point::from(Point3::new(0.0, 0.0, 0.0)),
+                Point::from(Point3::new(0.0, 0.0, 0.0)),
             ],
             state: &VERTEX_DATAPTRLOC,
         }
     }
 }
 
-impl<Support> From<[Support; 2]> for Simplex<Support>
+impl<Point> From<[Point; 2]> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    fn from(p: [Support; 2]) -> Self {
+    fn from(p: [Point; 2]) -> Self {
         Self::from((p[0], p[1]))
     }
 }
 
-impl<Support> From<(Support, Support)> for Simplex<Support>
+impl<Point> From<(Point, Point)> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    fn from(p: (Support, Support)) -> Self {
+    fn from(p: (Point, Point)) -> Self {
         Simplex {
             points: [
                 p.0,
                 p.1,
-                Support::from(Point3::new(0.0, 0.0, 0.0)),
-                Support::from(Point3::new(0.0, 0.0, 0.0)),
+                Point::from(Point3::new(0.0, 0.0, 0.0)),
+                Point::from(Point3::new(0.0, 0.0, 0.0)),
             ],
             state: &EDGE_DATAPTRLOC,
         }
     }
 }
 
-impl<Support> From<[Support; 3]> for Simplex<Support>
+impl<Point> From<[Point; 3]> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    fn from(p: [Support; 3]) -> Self {
+    fn from(p: [Point; 3]) -> Self {
         Self::from((p[0], p[1], p[2]))
     }
 }
           
-impl<Support> From<(Support, Support, Support)> for Simplex<Support>
+impl<Point> From<(Point, Point, Point)> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    fn from(p: (Support, Support, Support)) -> Self {
+    fn from(p: (Point, Point, Point)) -> Self {
         Simplex {
             points: [
                 p.0,
                 p.1,
                 p.2,
-                Support::from(Point3::new(0.0, 0.0, 0.0)),
+                Point::from(Point3::new(0.0, 0.0, 0.0)),
             ],
             state: &FACE_DATAPTRLOC,
         }
     }
 }
 
-impl<Support> From<[Support; 4]> for Simplex<Support>
+impl<Point> From<[Point; 4]> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    fn from(p: [Support; 4]) -> Self {
+    fn from(p: [Point; 4]) -> Self {
         Self::from((p[0], p[1], p[2], p[3]))
     }
 }
 
-impl<Support> From<(Support, Support, Support, Support)> for Simplex<Support>
+impl<Point> From<(Point, Point, Point, Point)> for Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
 {
-    fn from(p: (Support, Support, Support, Support)) -> Self {
+    fn from(p: (Point, Point, Point, Point)) -> Self {
         Simplex {
             points: [
                 p.0,
@@ -157,38 +161,67 @@ where
     }
 }
 
-impl<Support> Simplex<Support>
+impl<Point> Simplex<Point>
 where
-    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static + fmt::Debug
 {
     /// Finds the closest point on the shape to the origin
     pub fn closest_point_to_origin<S>(&mut self, shape: &S) -> Point3<f32>
     where
-        S: Convex<Support>
+        S: Convex<Point>
     {
+        let mut prev_norm = Vector3::zero();
+        let mut i = 0;
         loop {
             let (min_norm, next_state) = self.state.min_norm(&mut self.points);
-            self.state = next_state;
+            println!("simplex = {:?}, len = {:?}", self, self.state.len());
             if min_norm.magnitude2() < COLLISION_EPSILON {
-                return Point3::from_vec(min_norm);
+                println!("here!!!!");
+                let final_min_norm = min_norm;
+                loop {
+                    println!("curr simplex = {:?}", self);
+                    let (min_norm, next_state):(Vector3<_>, &'static SimplexState<_>) = match self.state.len() {
+                        3 => (-Vector3::new(prev_norm.z, prev_norm.x, prev_norm.y), &VOLUME_DATAPTRLOC),
+                        4 => return Point3::from_vec(final_min_norm),
+                        2 => (-Vector3::new(prev_norm.z, prev_norm.x, prev_norm.y), &FACE_DATAPTRLOC),
+                        _ => panic!("fred fuchs, is that you?!")
+                    };
+                    let support = shape.support(-min_norm.normalize());
+                    let support_v = support.into().to_vec();
+                    prev_norm = -min_norm.normalize();
+                    self.state = next_state;
+                    self.state.add_point(&mut self.points, support);
+                }
             }
+            println!("min_norm = {:?}", min_norm);
             let support = shape.support(-min_norm.normalize());
+            println!("support = {:?}", support);
             let support_v = support.into().to_vec();
+            prev_norm = min_norm;
             if min_norm.magnitude2() == support_v.magnitude2() {
+                panic!("this do!!");
                 return Point3::from_vec(min_norm);
             }
+            self.state = next_state;
             self.state.add_point(&mut self.points, support);
+            println!("simplex = {:?}, len = {:?}", self, self.state.len());
+            i += 1;
+            if i == 5 {
+                panic!("shit!!");
+            }
         }
     }
 }
 
-trait SimplexState<Support>
+trait SimplexState<Point>
 where
-    Support: Into<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + Copy + Clone + 'static
 {
-    fn min_norm(&self, &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>);
+    fn min_norm(&self, &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>);
 
-    fn add_point(&self, &mut [Support; 4], Support);
+    fn add_point(&self, &mut [Point; 4], Point);
+
+    fn len(&self) -> usize;
 }
 
 struct VertexSimplex{}
@@ -201,24 +234,26 @@ static EDGE_DATAPTRLOC: EdgeSimplex = EdgeSimplex{};
 static FACE_DATAPTRLOC: FaceSimplex = FaceSimplex{};
 static VOLUME_DATAPTRLOC: VolumeSimplex = VolumeSimplex{};
 
-impl<Support> SimplexState<Support> for VertexSimplex
+impl<Point> SimplexState<Point> for VertexSimplex
 where
-    Support: Into<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + Copy + Clone + 'static
 {
-    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
+    fn min_norm(&self, simp: &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>) {
         (simp[0].into().to_vec(), &EDGE_DATAPTRLOC)
     }
 
-    fn add_point(&self, simp:  &mut [Support; 4], p: Support) {
+    fn add_point(&self, simp:  &mut [Point; 4], p: Point) {
         simp[0] = p
     }
+
+    fn len(&self) -> usize { 1 }
 }
 
-impl<Support> SimplexState<Support> for EdgeSimplex
+impl<Point> SimplexState<Point> for EdgeSimplex
 where
-    Support: Into<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + Copy + Clone + 'static
 {
-    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
+    fn min_norm(&self, simp: &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>) {
         let ab = simp[1].into() - simp[0].into();
         let t = ab.dot(-simp[0].into().to_vec());
         if t <= 0.0 {
@@ -234,17 +269,19 @@ where
         }
     }
 
-    fn add_point(&self, simp: &mut [Support; 4], p: Support) {
+    fn add_point(&self, simp: &mut [Point; 4], p: Point) {
         simp[1] = p
     }
+
+    fn len(&self) -> usize { 2 }
 }    
 
 
-impl<Support> SimplexState<Support> for FaceSimplex
+impl<Point> SimplexState<Point> for FaceSimplex
 where
-    Support: Into<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + Copy + Clone + 'static
 {
-    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
+    fn min_norm(&self, simp: &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>) {
         let ab = simp[1].into() - simp[0].into();
         let ac = simp[2].into() - simp[0].into();
         let ap = -simp[0].into().to_vec();
@@ -303,9 +340,11 @@ where
         ((simp[0].into().to_vec() + ab * v + ac * w), &VOLUME_DATAPTRLOC)
     }
 
-    fn add_point(&self, simp:  &mut [Support; 4], p: Support) {
+    fn add_point(&self, simp:  &mut [Point; 4], p: Point) {
         simp[2] = p;
     }
+
+    fn len(&self) -> usize { 3 }
 }
 
 fn origin_outside_plane(
@@ -317,14 +356,14 @@ fn origin_outside_plane(
     sign_p * sign_d < 0.0
 }
 
-impl<Support> SimplexState<Support> for VolumeSimplex
+impl<Point> SimplexState<Point> for VolumeSimplex
 where
-    Support: Into<Point3<f32>> + Copy + Clone + 'static
+    Point: Into<Point3<f32>> + Copy + Clone + 'static
 {
-    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
+    fn min_norm(&self, simp: &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>) {
         let mut closest_pt: Vector3<f32> = Vector3::zero();
         let mut best_dist: f32 = f32::INFINITY;
-        let mut next_state: &'static SimplexState<Support> = &VERTEX_DATAPTRLOC;
+        let mut next_state: &'static SimplexState<Point> = &VERTEX_DATAPTRLOC;
         let (a, b, c, d) = (simp[0], simp[1], simp[2], simp[3]);
         let (av, bv, cv, dv) = (a.into().to_vec(), b.into().to_vec(), c.into().to_vec(), d.into().to_vec());
         // Test face abc
@@ -378,7 +417,165 @@ where
         (closest_pt, next_state)
     }
 
-    fn add_point(&self, simp: &mut [Support; 4], p: Support) {
+    fn add_point(&self, simp: &mut [Point; 4], p: Point) {
         simp[3] = p
     }
+
+    fn len(&self) -> usize { 4 }
 }
+
+#[derive(Default)]
+struct EdgeMap {
+    map: HashMap<[ (u32, u32, u32); 2 ], [ (Point3<f32>, Point3<f32>); 2 ]>,
+}
+
+impl EdgeMap {
+    fn add_edge(&mut self, a: SupportPoint, b: SupportPoint) {
+        let la = (a.a, a.b);
+        let lb = (b.a, b.b);
+        let a = unsafe {
+            (
+                mem::transmute::<f32, u32>(a.p.x),
+                mem::transmute::<f32, u32>(a.p.y),
+                mem::transmute::<f32, u32>(a.p.z),
+            )
+        };
+        let b = unsafe {
+            (
+                mem::transmute::<f32, u32>(b.p.x),
+                mem::transmute::<f32, u32>(b.p.y),
+                mem::transmute::<f32, u32>(b.p.z),
+            )
+        };
+        let ba = [ b, a ];
+        if self.map.contains_key(&ba) {
+            self.map.remove(&ba);
+            return;
+        }
+        self.map.insert(
+            [ a, b ],
+            [ la, lb ]
+        );
+    }
+}
+        
+
+impl Simplex<SupportPoint> {
+    /// Generates a contact from a simplex. This uses the EPA algorithm. Based on
+    /// the description here: http://hacktank.net/blog/?p=119
+    pub fn compute_contact<S1, S2>(&self, s1: &S1, s2: &S2) -> DiscreteContact
+    where
+        S1: Convex,
+        S2: Convex
+    {
+        let diff = MinkowskiDiff{ s1, s2 };
+        /*
+//        while self.state.len() < 3 {
+            let (min_norm, next_state) = self.state.min_norm(&mut self.points);
+            self.state = next_state;
+            let support: SupportPoint = diff.support(-min_norm.normalize());
+            let support_p: Point3<_> = support.into();
+            let support_v = support_p.to_vec();
+            self.state.add_point(&mut self.points, support);
+//        }
+         */
+        let [ a, b, c, d ] = self.points;
+        let mut tris = Pool::from(
+            match self.state.len() {
+                3 => vec![ (a, b, c) ],
+                4 => vec![
+                    (a, b, c),
+                    (a, c, d),
+                    (a, d, b),
+                    (b, d, c)
+                ],
+                _ => panic!("simplex is too small"),
+            }
+        );
+        let mut edges = EdgeMap::default();
+        const MAX_ITERATIONS: usize = 100;
+        for iter in 0..=MAX_ITERATIONS {
+            println!("loop");
+            let (closest_dist, closest_i, closest_n) = {
+                let mut closest_dist = f32::INFINITY;
+                let mut closest_i = 0usize;
+                let mut closest_n = Vector3::zero();
+                for (i, (a, b, c)) in tris.iter() {
+                    let tri = Triangle::from((a.p, b.p, c.p));
+//                    println!("tri = {:?}", tri);
+                    let n = tri.normal();
+//                    println!("n = {:?}", n);
+                    let dist = n.dot(a.p.to_vec()).abs();
+//                    println!("dist = {:?}", dist);
+                    if closest_dist > dist {
+                        closest_dist = dist;
+                        closest_i = i;
+                        closest_n = n;
+                    }
+                }
+                (closest_dist, closest_i, closest_n)
+            };
+            let closest_tri = {
+                let (a, b, c) = tris[closest_i];
+                ( Triangle::from((a.p, b.p, c.p)), Triangle::from((a.a, b.a, c.a)) )
+            };
+            let support: SupportPoint = diff.support(closest_n);
+            let v = closest_n.dot(support.p.to_vec()) - closest_dist;
+            println!("v = {:?}", v);
+            if v < COLLISION_EPSILON || iter == MAX_ITERATIONS {
+                println!("distance = {:?}", closest_n.dot(closest_tri.0.normal()));
+                let (u, v, w ) = closest_tri.0.barycentric(Point3::from_vec(closest_dist * closest_n));
+                let a = u * closest_tri.1.a + v * closest_tri.1.b + w * closest_tri.1.c;
+                return DiscreteContact {
+                    a: Point3::from_vec(a),
+                    b: Point3::from_vec(a - closest_dist*closest_n),
+                    n: -closest_n,
+                };
+            }
+            // TODO: fix this being a thing.
+            let mut to_remove = Vec::new();
+            for (i, (a, b, c)) in tris.iter() {
+                let n = Triangle::from((a.p, b.p, c.p)).normal();
+                if n.dot(support.p - a.p) > 0.0 {
+                    edges.add_edge(*a, *b);
+                    edges.add_edge(*b, *c);
+                    edges.add_edge(*c, *a);
+                    to_remove.push(i);
+                }
+            }
+            for i in to_remove {
+                tris.remove(i);
+            }
+            for ([( apx, apy, apz ), ( bpx, bpy, bpz ) ], [ la, lb ]) in edges.map.iter() {
+                let a = unsafe {
+                    (
+                        mem::transmute::<u32, f32>(*apx),
+                        mem::transmute::<u32, f32>(*apy),
+                        mem::transmute::<u32, f32>(*apz)
+                    )
+                };
+                let b = unsafe {
+                    (
+                        mem::transmute::<u32, f32>(*bpx),
+                        mem::transmute::<u32, f32>(*bpy),
+                        mem::transmute::<u32, f32>(*bpz)
+                    )
+                };
+                let a = SupportPoint {
+                    p: Point3::new(a.0, a.1, a.2),
+                    a: la.0,
+                    b: la.1
+                };
+                let b = SupportPoint {
+                    p: Point3::new(b.0, b.1, b.2),
+                    a: lb.0,
+                    b: lb.1
+                };
+                tris.push((support, a, b));
+            }
+            edges.map.clear();
+        }
+        unreachable!()
+    }
+}
+    

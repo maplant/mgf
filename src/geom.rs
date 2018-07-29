@@ -95,6 +95,21 @@ impl Triangle {
     pub fn normal(&self) -> Vector3<f32> {
         (self.b - self.a).cross(self.c - self.a).normalize()
     }
+
+    pub fn barycentric(&self, p: Point3<f32>) -> ( f32, f32, f32 ) {
+        let v0 = self.b - self.a;
+        let v1 = self.c - self.a;
+        let v2 = p.to_vec() - self.a;
+        let d0 = v0.dot(v0);
+        let d1 = v0.dot(v1);
+        let d2 = v1.dot(v1);
+        let d3 = v2.dot(v0);
+        let d4 = v2.dot(v1);
+        let denom = d0 * d2 - d1 * d1;
+        let v = ( d2 * d3 - d1 * d4 ) / denom;
+        let w = ( d0 * d4 - d1 * d3 ) / denom;
+        ( v, w, 1.0 - v - w )
+    }
 }
 
 // TODO: in the future, check that the triangle is clockwise and orient it if it
@@ -1155,21 +1170,21 @@ impl Convex for Sphere {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PointWithLocals {
-    p: Point3<f32>,
-    a: Point3<f32>,
-    b: Point3<f32>,
+pub struct SupportPoint {
+    pub p: Point3<f32>,
+    pub a: Point3<f32>,
+    pub b: Point3<f32>,
 }
 
-impl Into<Point3<f32>> for PointWithLocals {
+impl Into<Point3<f32>> for SupportPoint {
     fn into(self) -> Point3<f32> {
         self.p
     }
 }
 
-impl From<Point3<f32>> for PointWithLocals {
+impl From<Point3<f32>> for SupportPoint {
     fn from(p: Point3<f32>) -> Self {
-        PointWithLocals {
+        SupportPoint {
             p,
             a: Point3::new(0.0, 0.0, 0.0),
             b: Point3::new(0.0, 0.0, 0.0),
@@ -1196,16 +1211,16 @@ where
     }
 }
 
-impl<'a, 'b, 'c, 'd, S1, S2> Convex<PointWithLocals> for MinkowskiDiff<'a, 'b, S1, S2>
+impl<'a, 'b, 'c, 'd, S1, S2> Convex<SupportPoint> for MinkowskiDiff<'a, 'b, S1, S2>
 where
     S1: Convex + 'a,
     S2: Convex + 'b,
 {
-    fn support(&self, axis: Vector3<f32>) -> PointWithLocals {
+    fn support(&self, axis: Vector3<f32>) -> SupportPoint {
         let a = self.s1.support(axis);
         let b = self.s2.support(-axis);
         let p = Point3::from_vec(a - b);
-        PointWithLocals {
+        SupportPoint {
             p,
             a,
             b

@@ -15,7 +15,7 @@
 
 use std::mem;
 use std::slice;
-use std::iter::FilterMap;
+use std::iter::{Enumerate, FilterMap};
 use std::ops::{Index, IndexMut};
 use std::vec::Vec;
 
@@ -117,11 +117,11 @@ impl<T> Pool<T> {
         }
     }
     
-    pub fn iter<'a>(&'a self) -> FilterMap<slice::Iter<'a, PoolEntry<T>>, fn(&PoolEntry<T>) -> Option<&T>> {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item=(usize, &'a T)> {
         self.into_iter()
     }
 
-    pub fn iter_mut<'a>(&'a mut self) ->  FilterMap<slice::IterMut<'a, PoolEntry<T>>, fn(&mut PoolEntry<T>) -> Option<&mut T>> {
+    pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item=(usize, &'a mut T)> { 
         self.into_iter()
     }
 }
@@ -176,37 +176,50 @@ where
     }
 }
 
-fn filter_pool<'a, T>(item: &'a PoolEntry<T>) -> Option<&'a T> {
+impl<L, T> From<L> for Pool<T>
+where
+    L: IntoIterator<Item = T>
+{
+    fn from(iter: L) -> Pool<T> {
+        let mut pool = Pool::new();
+        for item in iter.into_iter() {
+            pool.push(item);
+        }
+        pool
+    }
+}
+
+fn filter_pool<'a, T>((i, item): (usize, &'a PoolEntry<T>)) -> Option<(usize, &'a T)> {
     if let &PoolEntry::Occupied(ref item) = item {
-        Some(item)
+        Some((i, item))
     } else {
         None
     }
 }
 
 impl<'a, T> IntoIterator for &'a Pool<T> {
-    type Item = &'a T;
-    type IntoIter = FilterMap<slice::Iter<'a, PoolEntry<T>>, fn(&PoolEntry<T>) -> Option<&T>>;
+    type Item = (usize, &'a T);
+    type IntoIter = FilterMap<Enumerate<slice::Iter<'a, PoolEntry<T>>>, fn((usize, &PoolEntry<T>)) -> Option<(usize, &T)>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.entries.iter().filter_map(filter_pool)
+        self.entries.iter().enumerate().filter_map(filter_pool)
     }
 }
 
-fn filter_pool_mut<'a, T>(item: &'a mut PoolEntry<T>) -> Option<&'a mut T> {
+fn filter_pool_mut<'a, T>((i, item): (usize, &'a mut PoolEntry<T>)) -> Option<(usize, &'a mut T)> {
     if let &mut PoolEntry::Occupied(ref mut item) = item {
-        Some(item)
+        Some((i, item))
     } else {
         None
     }
 }
 
 impl<'a, T> IntoIterator for &'a mut Pool<T> {
-    type Item = &'a mut T;
-    type IntoIter = FilterMap<slice::IterMut<'a, PoolEntry<T>>, fn(&mut PoolEntry<T>) -> Option<&mut T>>;
+    type Item = (usize, &'a mut T);
+    type IntoIter = FilterMap<Enumerate<slice::IterMut<'a, PoolEntry<T>>>, fn((usize, &mut PoolEntry<T>)) -> Option<(usize, &mut T)>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.entries.iter_mut().filter_map(filter_pool_mut)
+        self.entries.iter_mut().enumerate().filter_map(filter_pool_mut)
     }
 }
 
@@ -233,7 +246,7 @@ mod tests {
             assert_eq!(pool[id0], 0);
             assert_eq!(pool[id3], 3);
 
-            assert_eq!(pool.iter().map(|&u|{u}).collect::<Vec<usize>>(), vec![0, 3]);
+            assert_eq!(pool.iter().map(|(_i, &u)|{u}).collect::<Vec<usize>>(), vec![0, 3]);
         }
 
         #[test]
@@ -246,7 +259,7 @@ mod tests {
                 }
                 let ids = [ 0, 1, 2, 3, 4, 5, 6, 7 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 // Remove every other item
                 for i in 0..4 {
@@ -254,13 +267,13 @@ mod tests {
                 }
                 let ids = [ 1, 3, 5, 7 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 {
                     let _removed = pool.remove(1);
                     let ids = [ 3, 5, 7 ];
                     for (i, item) in pool.iter().enumerate() {
-                        assert_eq!(*item, ids[i]);
+                        assert_eq!(*item.1, ids[i]);
                     }
                 }
             }
@@ -273,7 +286,7 @@ mod tests {
                 let ids = [ 0, 1, 2, 3, 4, 5, 6, 7,
                             8, 9, 10, 11, 12, 13, 14, 15 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 // Remove every other item
                 for i in 0..8 {
@@ -281,13 +294,13 @@ mod tests {
                 }
                 let ids = [ 1, 3, 5, 7, 9, 11, 13, 15 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 {
                     let _removed = pool.remove(1);
                     let ids = [ 3, 5, 7, 9, 11, 13, 15 ];
                     for (i, item) in pool.iter().enumerate() {
-                        assert_eq!(*item, ids[i]);
+                        assert_eq!(*item.1, ids[i]);
                     }
                 }
             }
@@ -301,20 +314,20 @@ mod tests {
                 let ids = [ 0, 1, 2, 3, 4, 5, 6, 7,
                             8, 9, 10, 11, 12, 13, 14, 15 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 for i in 0..8 {
                     pool.remove(i);
                 }
                 let ids = [ 8, 9, 10, 11, 12, 13, 14, 15 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 {
                     let _removed = pool.remove(8);
                     let ids = [ 9, 10, 11, 12, 13, 14, 15 ];
                     for (i, item) in pool.iter().enumerate() {
-                        assert_eq!(*item, ids[i]);
+                        assert_eq!(*item.1, ids[i]);
                     }
                 }
             }
@@ -329,7 +342,7 @@ mod tests {
                             8, 9, 10, 11, 12, 13, 14, 15,
                             16, 17, 18, 19, 20, 21, 22, 23 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 for i in 8..16 {
                     pool.remove(i);
@@ -337,7 +350,7 @@ mod tests {
                 let ids = [ 0, 1, 2, 3, 4, 5, 6, 7, 
                             16, 17, 18, 19, 20, 21, 22, 23 ];
                 for (i, item) in pool.iter().enumerate() {
-                    assert_eq!(*item, ids[i]);
+                    assert_eq!(*item.1, ids[i]);
                 }
                 {
                     let _removed1 = pool.remove(23);
@@ -346,7 +359,7 @@ mod tests {
                     let ids = [ 0, 1, 2, 3, 4, 5, 6, 7,
                                 16, 17, 20, 21, 22 ];
                     for (i, item) in pool.iter().enumerate() {
-                        assert_eq!(*item, ids[i]);
+                        assert_eq!(*item.1, ids[i]);
                     }
                 }
             }
