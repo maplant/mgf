@@ -1117,11 +1117,14 @@ impl Volumetric for Capsule {
 }
 
 /// A type that represents a convex volume.
-pub trait Convex {
+pub trait Convex<Support = Point3<f32>>
+where
+    Support: Into<Point3<f32>>
+{
     /// Returns the point on the object that produces the greatest dot product
     /// with the supplied axis. The axis is expected to be normalized.
     // TODO: add an optional "initial" argument so that we can speed up the search.
-    fn support(&self, axis: Vector3<f32>) -> Point3<f32>;
+    fn support(&self, axis: Vector3<f32>) -> Support;
 }
 
 impl Convex for AABB {
@@ -1151,6 +1154,29 @@ impl Convex for Sphere {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct PointWithLocals {
+    p: Point3<f32>,
+    a: Point3<f32>,
+    b: Point3<f32>,
+}
+
+impl Into<Point3<f32>> for PointWithLocals {
+    fn into(self) -> Point3<f32> {
+        self.p
+    }
+}
+
+impl From<Point3<f32>> for PointWithLocals {
+    fn from(p: Point3<f32>) -> Self {
+        PointWithLocals {
+            p,
+            a: Point3::new(0.0, 0.0, 0.0),
+            b: Point3::new(0.0, 0.0, 0.0),
+        }
+    }
+}
+
 pub struct MinkowskiDiff<'a, 'b, S1, S2>
 where
     S1: Convex + 'a,
@@ -1166,7 +1192,24 @@ where
     S2: Convex + 'b,
 {
     fn support(&self, axis: Vector3<f32>) -> Point3<f32> {
-        Point3::from_vec(self.s1.support(axis).to_vec() - self.s2.support(-axis).to_vec())
+        Point3::from_vec(self.s1.support(axis) - self.s2.support(-axis))
+    }
+}
+
+impl<'a, 'b, 'c, 'd, S1, S2> Convex<PointWithLocals> for MinkowskiDiff<'a, 'b, S1, S2>
+where
+    S1: Convex + 'a,
+    S2: Convex + 'b,
+{
+    fn support(&self, axis: Vector3<f32>) -> PointWithLocals {
+        let a = self.s1.support(axis);
+        let b = self.s2.support(-axis);
+        let p = Point3::from_vec(a - b);
+        PointWithLocals {
+            p,
+            a,
+            b
+        }
     }
 }
 

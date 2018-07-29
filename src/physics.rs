@@ -90,8 +90,8 @@ pub struct Velocity {
 /// A vector of rigid bodies. 
 #[derive(Clone)]
 pub struct RigidBodyVec {
-    x: Vec<Point3<f32>>,
-    q: Vec<Quaternion<f32>>,
+    pub x: Vec<Point3<f32>>,
+    pub q: Vec<Quaternion<f32>>,
     v: Vec<Vector3<f32>>,
     omega: Vec<Vector3<f32>>,
     force: Vec<Vector3<f32>>,
@@ -102,7 +102,7 @@ pub struct RigidBodyVec {
     inv_moment_body: Vec<Matrix3<f32>>,
     inv_moment: Vec<Matrix3<f32>>,
     constructor: Vec<ComponentConstructor>,
-    collider: Vec<Moving<Component>>,
+    pub collider: Vec<Moving<Component>>,
 }
 
 /// A reference to an element of a RigidBodyVec.

@@ -20,12 +20,18 @@ use cgmath::prelude::*;
 use cgmath::{EuclideanSpace, InnerSpace, Point3, Vector3};
 use geom::*;
 
-pub struct Simplex {
-    points: [Vector3<f32>; 4],
-    state: &'static SimplexState,
+pub struct Simplex<Support = Point3<f32>>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    points: [Support; 4],
+    state: &'static SimplexState<Support>,
 }
 
-impl fmt::Debug for Simplex {
+impl<Support> fmt::Debug for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static + fmt::Debug
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         #[derive(Debug)]
         enum StateName {
@@ -47,91 +53,118 @@ impl fmt::Debug for Simplex {
     }
 }
 
-impl From<[Point3<f32>; 1]> for Simplex {
-    fn from(p: [Point3<f32>; 1]) -> Self {
+impl<Support> From<[Support; 1]> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static 
+{
+    fn from(p: [Support; 1]) -> Self {
         Self::from(p[0])
     }
 }
           
-impl From<Point3<f32>> for Simplex {
-    fn from(p: Point3<f32>) -> Self {
+impl<Support> From<Support> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    fn from(p: Support) -> Self {
         Simplex {
             points: [
-                p.to_vec(),
-                Vector3::new(0.0, 0.0, 0.0),
-                Vector3::new(0.0, 0.0, 0.0),
-                Vector3::new(0.0, 0.0, 0.0),
+                p,
+                Support::from(Point3::new(0.0, 0.0, 0.0)),
+                Support::from(Point3::new(0.0, 0.0, 0.0)),
+                Support::from(Point3::new(0.0, 0.0, 0.0)),
             ],
             state: &VERTEX_DATAPTRLOC,
         }
     }
 }
 
-impl From<[Point3<f32>; 2]> for Simplex {
-    fn from(p: [Point3<f32>; 2]) -> Self {
+impl<Support> From<[Support; 2]> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    fn from(p: [Support; 2]) -> Self {
         Self::from((p[0], p[1]))
     }
 }
 
-impl From<(Point3<f32>, Point3<f32>)> for Simplex {
-    fn from(p: (Point3<f32>, Point3<f32>)) -> Self {
+impl<Support> From<(Support, Support)> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    fn from(p: (Support, Support)) -> Self {
         Simplex {
             points: [
-                p.0.to_vec(),
-                p.1.to_vec(),
-                Vector3::new(0.0, 0.0, 0.0),
-                Vector3::new(0.0, 0.0, 0.0),
+                p.0,
+                p.1,
+                Support::from(Point3::new(0.0, 0.0, 0.0)),
+                Support::from(Point3::new(0.0, 0.0, 0.0)),
             ],
             state: &EDGE_DATAPTRLOC,
         }
     }
 }
 
-impl From<[Point3<f32>; 3]> for Simplex {
-    fn from(p: [Point3<f32>; 3]) -> Self {
+impl<Support> From<[Support; 3]> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    fn from(p: [Support; 3]) -> Self {
         Self::from((p[0], p[1], p[2]))
     }
 }
           
-impl From<(Point3<f32>, Point3<f32>, Point3<f32>)> for Simplex {
-    fn from(p: (Point3<f32>, Point3<f32>, Point3<f32>)) -> Self {
+impl<Support> From<(Support, Support, Support)> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    fn from(p: (Support, Support, Support)) -> Self {
         Simplex {
             points: [
-                p.0.to_vec(),
-                p.1.to_vec(),
-                p.2.to_vec(),
-                Vector3::new(0.0, 0.0, 0.0),
+                p.0,
+                p.1,
+                p.2,
+                Support::from(Point3::new(0.0, 0.0, 0.0)),
             ],
             state: &FACE_DATAPTRLOC,
         }
     }
 }
 
-impl From<[Point3<f32>; 4]> for Simplex {
-    fn from(p: [Point3<f32>; 4]) -> Self {
+impl<Support> From<[Support; 4]> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    fn from(p: [Support; 4]) -> Self {
         Self::from((p[0], p[1], p[2], p[3]))
     }
 }
 
-impl From<(Point3<f32>, Point3<f32>, Point3<f32>, Point3<f32>)> for Simplex {
-    fn from(p: (Point3<f32>, Point3<f32>, Point3<f32>, Point3<f32>)) -> Self {
+impl<Support> From<(Support, Support, Support, Support)> for Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
+    fn from(p: (Support, Support, Support, Support)) -> Self {
         Simplex {
             points: [
-                p.0.to_vec(),
-                p.1.to_vec(),
-                p.2.to_vec(),
-                p.3.to_vec(),
+                p.0,
+                p.1,
+                p.2,
+                p.3,
             ],
             state: &VOLUME_DATAPTRLOC,
         }
     }
 }
 
-impl Simplex {
+impl<Support> Simplex<Support>
+where
+    Support: Into<Point3<f32>> + From<Point3<f32>> + Copy + Clone + 'static
+{
     /// Finds the closest point on the shape to the origin
     pub fn closest_point_to_origin<S>(&mut self, shape: &S) -> Point3<f32>
     where
-        S: Convex
+        S: Convex<Support>
     {
         loop {
             let (min_norm, next_state) = self.state.min_norm(&mut self.points);
@@ -139,8 +172,9 @@ impl Simplex {
             if min_norm.magnitude2() < COLLISION_EPSILON {
                 return Point3::from_vec(min_norm);
             }
-            let support = shape.support(-min_norm.normalize()).to_vec();
-            if min_norm.magnitude2() == support.magnitude2() {
+            let support = shape.support(-min_norm.normalize());
+            let support_v = support.into().to_vec();
+            if min_norm.magnitude2() == support_v.magnitude2() {
                 return Point3::from_vec(min_norm);
             }
             self.state.add_point(&mut self.points, support);
@@ -148,10 +182,13 @@ impl Simplex {
     }
 }
 
-trait SimplexState {
-    fn min_norm(&self, &mut [Vector3<f32>; 4]) -> (Vector3<f32>, &'static SimplexState);
+trait SimplexState<Support>
+where
+    Support: Into<Point3<f32>> + Copy + Clone + 'static
+{
+    fn min_norm(&self, &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>);
 
-    fn add_point(&self, &mut [Vector3<f32>; 4], Vector3<f32>);
+    fn add_point(&self, &mut [Support; 4], Support);
 }
 
 struct VertexSimplex{}
@@ -164,75 +201,84 @@ static EDGE_DATAPTRLOC: EdgeSimplex = EdgeSimplex{};
 static FACE_DATAPTRLOC: FaceSimplex = FaceSimplex{};
 static VOLUME_DATAPTRLOC: VolumeSimplex = VolumeSimplex{};
 
-impl SimplexState for VertexSimplex {
-    fn min_norm(&self, simp: &mut [Vector3<f32>; 4]) -> (Vector3<f32>, &'static SimplexState) {
-        (simp[0], &EDGE_DATAPTRLOC)
+impl<Support> SimplexState<Support> for VertexSimplex
+where
+    Support: Into<Point3<f32>> + Copy + Clone + 'static
+{
+    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
+        (simp[0].into().to_vec(), &EDGE_DATAPTRLOC)
     }
 
-    fn add_point(&self, simp:  &mut [Vector3<f32>; 4], p: Vector3<f32>) {
+    fn add_point(&self, simp:  &mut [Support; 4], p: Support) {
         simp[0] = p
     }
 }
 
-impl SimplexState for EdgeSimplex {
-    fn min_norm(&self, simp: &mut [Vector3<f32>; 4]) -> (Vector3<f32>, &'static SimplexState) {
-        let ab = simp[1] - simp[0];
-        let t = ab.dot(-simp[0]);
+impl<Support> SimplexState<Support> for EdgeSimplex
+where
+    Support: Into<Point3<f32>> + Copy + Clone + 'static
+{
+    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
+        let ab = simp[1].into() - simp[0].into();
+        let t = ab.dot(-simp[0].into().to_vec());
         if t <= 0.0 {
-            (simp[0], &EDGE_DATAPTRLOC)
+            (simp[0].into().to_vec(), &EDGE_DATAPTRLOC)
         } else {
             let denom = ab.dot(ab);
             if t >= denom {
                 simp[0] = simp[1];
-                (simp[1], &EDGE_DATAPTRLOC)
+                (simp[1].into().to_vec(), &EDGE_DATAPTRLOC)
             } else {
-                (simp[0] + ab * (t / denom), &FACE_DATAPTRLOC)
+                (simp[0].into().to_vec() + ab * (t / denom), &FACE_DATAPTRLOC)
             }
         }
     }
 
-    fn add_point(&self, simp: &mut [Vector3<f32>; 4], p: Vector3<f32>) {
+    fn add_point(&self, simp: &mut [Support; 4], p: Support) {
         simp[1] = p
     }
 }    
 
 
-impl SimplexState for FaceSimplex {
-    fn min_norm(&self, simp: &mut [Vector3<f32>; 4]) -> (Vector3<f32>, &'static SimplexState) {
-        let ab = simp[1] - simp[0];
-        let ac = simp[2] - simp[0];
-        let ap = -simp[0];
+impl<Support> SimplexState<Support> for FaceSimplex
+where
+    Support: Into<Point3<f32>> + Copy + Clone + 'static
+{
+    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
+        let ab = simp[1].into() - simp[0].into();
+        let ac = simp[2].into() - simp[0].into();
+        let ap = -simp[0].into().to_vec();
         let d1 = ab.dot(ab);
         let d2 = ac.dot(ap);
 
         // Vertex region A
         if d1 <= 0.0 && d2 <= 0.0 {
-            return (simp[0], &EDGE_DATAPTRLOC);
+            return (simp[0].into().to_vec(), &EDGE_DATAPTRLOC);
         }
 
         // Vertex region B
-        let bp = -simp[1];
+        let bp = -simp[1].into().to_vec();
         let d3 = ab.dot(bp);
         let d4 = ac.dot(bp);
         if d3 >= 0.0 && d4 <= d3 {
             simp[0] = simp[1];
-            return (simp[1], &EDGE_DATAPTRLOC);
+            return (simp[1].into().to_vec(), &EDGE_DATAPTRLOC);
         }
 
         // Edge region AB
         let vc = d1 * d4 - d3 * d2;
         if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
             let v = d1 / (d1 - d3);
-            return ((simp[0] + ab * v), &FACE_DATAPTRLOC);
+            return ((simp[0].into().to_vec() + ab * v), &FACE_DATAPTRLOC);
         }
 
         // Vertex region C
-        let cp = -simp[2];
+        let cp = -simp[2].into().to_vec();
         let d5 = ab.dot(cp);
         let d6 = ac.dot(cp);
         if d6 >= 0.0 && d5 <= d6 {
             simp[0] = simp[2];
-            return (simp[2], &EDGE_DATAPTRLOC);
+            return (simp[2].into().to_vec(), &EDGE_DATAPTRLOC);
         }
 
         // Edge region AC
@@ -240,7 +286,7 @@ impl SimplexState for FaceSimplex {
         if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
             let w = d2 / (d2 - d6);
             simp[1] = simp[2];
-            return ((simp[0] + ac * w), &FACE_DATAPTRLOC);
+            return ((simp[0].into().to_vec() + ac * w), &FACE_DATAPTRLOC);
         }
 
         // Edge region BC
@@ -248,16 +294,16 @@ impl SimplexState for FaceSimplex {
         if va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0 {
             let w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
             simp[0] = simp[2];
-            return ((simp[1] + (simp[2] - simp[1]) * w), &FACE_DATAPTRLOC);
+            return ((simp[1].into().to_vec() + (simp[2].into() - simp[1].into()) * w), &FACE_DATAPTRLOC);
         }
 
         let denom = 1.0 / (va + vb + vc);
         let v = vb * denom;
         let w = vc * denom;
-        ((simp[0] + ab * v + ac * w), &VOLUME_DATAPTRLOC)
+        ((simp[0].into().to_vec() + ab * v + ac * w), &VOLUME_DATAPTRLOC)
     }
 
-    fn add_point(&self, simp:  &mut [Vector3<f32>; 4], p: Vector3<f32>) {
+    fn add_point(&self, simp:  &mut [Support; 4], p: Support) {
         simp[2] = p;
     }
 }
@@ -271,14 +317,18 @@ fn origin_outside_plane(
     sign_p * sign_d < 0.0
 }
 
-impl SimplexState for VolumeSimplex {
-    fn min_norm(&self, simp: &mut [Vector3<f32>; 4]) -> (Vector3<f32>, &'static SimplexState) {
+impl<Support> SimplexState<Support> for VolumeSimplex
+where
+    Support: Into<Point3<f32>> + Copy + Clone + 'static
+{
+    fn min_norm(&self, simp: &mut [Support; 4]) -> (Vector3<f32>, &'static SimplexState<Support>) {
         let mut closest_pt: Vector3<f32> = Vector3::zero();
         let mut best_dist: f32 = f32::INFINITY;
-        let mut next_state: &'static SimplexState = &VERTEX_DATAPTRLOC;
+        let mut next_state: &'static SimplexState<Support> = &VERTEX_DATAPTRLOC;
         let (a, b, c, d) = (simp[0], simp[1], simp[2], simp[3]);
+        let (av, bv, cv, dv) = (a.into().to_vec(), b.into().to_vec(), c.into().to_vec(), d.into().to_vec());
         // Test face abc
-        if origin_outside_plane(a, b, c, d) {
+        if origin_outside_plane(av, bv, cv, dv) {
             let mut new_simp = [ a, b, c, d ];
             let (p, new_state) = FACE_DATAPTRLOC.min_norm(&mut new_simp);
             let new_dist = p.magnitude2();
@@ -290,7 +340,7 @@ impl SimplexState for VolumeSimplex {
             }
         }
         // Test face acd
-        if origin_outside_plane(a, c, d, b) {
+        if origin_outside_plane(av, cv, dv, bv) {
             let mut new_simp = [ a, c, d, b ];
             let (p, new_state) = FACE_DATAPTRLOC.min_norm(&mut new_simp);
             let new_dist = p.magnitude2();
@@ -302,7 +352,7 @@ impl SimplexState for VolumeSimplex {
             }
         }
         // Test face adb
-        if origin_outside_plane(a, d, b, c) {
+        if origin_outside_plane(av, dv, bv, cv) {
             let mut new_simp = [ a, d, b, c ];
             let (p, new_state) = FACE_DATAPTRLOC.min_norm(&mut new_simp);
             let new_dist = p.magnitude2();
@@ -314,7 +364,7 @@ impl SimplexState for VolumeSimplex {
             }
         }
         // Test face bdc
-        if origin_outside_plane(b, d, c, a) {
+        if origin_outside_plane(bv, dv, cv, av) {
             let mut new_simp = [ b, d, c, a ];
             let (p, new_state) = FACE_DATAPTRLOC.min_norm(&mut new_simp);
             let new_dist = p.magnitude2();
@@ -328,7 +378,7 @@ impl SimplexState for VolumeSimplex {
         (closest_pt, next_state)
     }
 
-    fn add_point(&self, simp: &mut [Vector3<f32>; 4], p: Vector3<f32>) {
+    fn add_point(&self, simp: &mut [Support; 4], p: Support) {
         simp[3] = p
     }
 }
