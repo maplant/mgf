@@ -171,44 +171,28 @@ where
         S: Convex<Point>
     {
         let mut prev_norm = Vector3::zero();
-        let mut i = 0;
         loop {
             let (min_norm, next_state) = self.state.min_norm(&mut self.points);
-            println!("simplex = {:?}, len = {:?}", self, self.state.len());
             if min_norm.magnitude2() < COLLISION_EPSILON {
-                println!("here!!!!");
-                let final_min_norm = min_norm;
-                loop {
-                    println!("curr simplex = {:?}", self);
-                    let (min_norm, next_state):(Vector3<_>, &'static SimplexState<_>) = match self.state.len() {
-                        3 => (-Vector3::new(prev_norm.z, prev_norm.x, prev_norm.y), &VOLUME_DATAPTRLOC),
-                        4 => return Point3::from_vec(final_min_norm),
-                        2 => (-Vector3::new(prev_norm.z, prev_norm.x, prev_norm.y), &FACE_DATAPTRLOC),
-                        _ => panic!("fred fuchs, is that you?!")
-                    };
+                // If the simplex is not a tetrahedron, we want to sample more 
+                // axis until it is one.
+                for i in self.state.len()..4 {
+                    let min_norm = -Vector3::new(prev_norm.z, prev_norm.x, prev_norm.y);
                     let support = shape.support(-min_norm.normalize());
-                    let support_v = support.into().to_vec();
                     prev_norm = -min_norm.normalize();
-                    self.state = next_state;
-                    self.state.add_point(&mut self.points, support);
+                    self.points[i] = support;
                 }
+                self.state = &VOLUME_DATAPTRLOC;
+                return Point3::new(0.0, 0.0, 0.0);
             }
-            println!("min_norm = {:?}", min_norm);
             let support = shape.support(-min_norm.normalize());
-            println!("support = {:?}", support);
             let support_v = support.into().to_vec();
             prev_norm = min_norm;
             if min_norm.magnitude2() == support_v.magnitude2() {
-                panic!("this do!!");
                 return Point3::from_vec(min_norm);
             }
             self.state = next_state;
             self.state.add_point(&mut self.points, support);
-            println!("simplex = {:?}, len = {:?}", self, self.state.len());
-            i += 1;
-            if i == 5 {
-                panic!("shit!!");
-            }
         }
     }
 }
@@ -468,45 +452,30 @@ impl Simplex<SupportPoint> {
         S1: Convex,
         S2: Convex
     {
+        if self.state.len() != 4 {
+            panic!("simplex is too small");
+        }
         let diff = MinkowskiDiff{ s1, s2 };
-        /*
-//        while self.state.len() < 3 {
-            let (min_norm, next_state) = self.state.min_norm(&mut self.points);
-            self.state = next_state;
-            let support: SupportPoint = diff.support(-min_norm.normalize());
-            let support_p: Point3<_> = support.into();
-            let support_v = support_p.to_vec();
-            self.state.add_point(&mut self.points, support);
-//        }
-         */
         let [ a, b, c, d ] = self.points;
         let mut tris = Pool::from(
-            match self.state.len() {
-                3 => vec![ (a, b, c) ],
-                4 => vec![
-                    (a, b, c),
-                    (a, c, d),
-                    (a, d, b),
-                    (b, d, c)
-                ],
-                _ => panic!("simplex is too small"),
-            }
+            vec![
+                (a, b, c),
+                (a, c, d),
+                (a, d, b),
+                (b, d, c)
+            ]
         );
         let mut edges = EdgeMap::default();
         const MAX_ITERATIONS: usize = 100;
         for iter in 0..=MAX_ITERATIONS {
-            println!("loop");
             let (closest_dist, closest_i, closest_n) = {
                 let mut closest_dist = f32::INFINITY;
                 let mut closest_i = 0usize;
                 let mut closest_n = Vector3::zero();
                 for (i, (a, b, c)) in tris.iter() {
                     let tri = Triangle::from((a.p, b.p, c.p));
-//                    println!("tri = {:?}", tri);
                     let n = tri.normal();
-//                    println!("n = {:?}", n);
                     let dist = n.dot(a.p.to_vec()).abs();
-//                    println!("dist = {:?}", dist);
                     if closest_dist > dist {
                         closest_dist = dist;
                         closest_i = i;
@@ -521,9 +490,7 @@ impl Simplex<SupportPoint> {
             };
             let support: SupportPoint = diff.support(closest_n);
             let v = closest_n.dot(support.p.to_vec()) - closest_dist;
-            println!("v = {:?}", v);
             if v < COLLISION_EPSILON || iter == MAX_ITERATIONS {
-                println!("distance = {:?}", closest_n.dot(closest_tri.0.normal()));
                 let (u, v, w ) = closest_tri.0.barycentric(Point3::from_vec(closest_dist * closest_n));
                 let a = u * closest_tri.1.a + v * closest_tri.1.b + w * closest_tri.1.c;
                 return DiscreteContact {

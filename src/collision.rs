@@ -1663,7 +1663,6 @@ mod tests {
                 s1.separation(&s2),
                 None
             );
-             panic!("{:?}", s1.contact(&s2));
             assert_eq!(
                 s2.separation(&s1),
                 None
