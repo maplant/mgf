@@ -447,7 +447,7 @@ impl EdgeMap {
 impl Simplex<SupportPoint> {
     /// Generates a contact from a simplex. This uses the EPA algorithm. Based on
     /// the description here: http://hacktank.net/blog/?p=119
-    pub fn compute_contact<S1, S2>(&self, s1: &S1, s2: &S2) -> DiscreteContact
+    pub fn compute_contact<S1, S2>(&self, s1: &S1, s2: &S2) -> Contact
     where
         S1: Convex,
         S2: Convex
@@ -493,10 +493,11 @@ impl Simplex<SupportPoint> {
             if v < COLLISION_EPSILON || iter == MAX_ITERATIONS {
                 let (u, v, w ) = closest_tri.0.barycentric(Point3::from_vec(closest_dist * closest_n));
                 let a = u * closest_tri.1.a + v * closest_tri.1.b + w * closest_tri.1.c;
-                return DiscreteContact {
+                return Contact {
                     a: Point3::from_vec(a),
                     b: Point3::from_vec(a - closest_dist*closest_n),
                     n: -closest_n,
+                    t: 0.0
                 };
             }
             // TODO: fix this being a thing.

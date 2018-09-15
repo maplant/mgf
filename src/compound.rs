@@ -131,7 +131,7 @@ impl Shape for Component {
 
 impl BoundedBy<AABB> for Component {
     fn bounds(&self) -> AABB {
-       match self {
+        match self {
             &Component::Sphere(s) => s.bounds(),
             &Component::Capsule(c) => c.bounds(),
         }

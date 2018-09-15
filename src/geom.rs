@@ -940,8 +940,8 @@ impl Shape for Capsule {
 ///
 /// Particle types are used to represent the motion of point particles in space.
 /// Point particles do not have any spatial extent, i.e. volume.
-pub trait Particle : Shape + Copy {
-    /// The length of the timestep.
+pub trait Particle: Shape + Copy {
+    /// The length of the time step.
     const DT: f32;
 
     /// The origin of the particle.
@@ -949,6 +949,9 @@ pub trait Particle : Shape + Copy {
 
     /// The direction of the particle.
     fn dir(&self) -> Vector3<f32>;
+
+    /// Rotate this particle around the world space of an object.
+    fn rotate_around<R: Rotation3<f32>>(&self, c: Point3<f32>, r: R) -> Self;
 }
 
 /// A ray represents a point particle traveling in a direction with infinite
@@ -962,6 +965,15 @@ impl Particle for Ray {
 
     fn dir(&self) -> Vector3<f32> {
         self.d
+    }
+
+    fn rotate_around<R: Rotation3<f32>>(&self, c: Point3<f32>, r: R) -> Self {
+        let p = r.rotate_vector(self.p - c) + c.to_vec();
+        let d = r.rotate_vector(self.d);
+        Ray {
+            p: Point3::from_vec(p),
+            d
+        }
     }
 }
 
@@ -978,6 +990,17 @@ impl Particle for Segment {
     fn dir(&self) -> Vector3<f32> {
         self.b - self.a
     }
+    
+    fn rotate_around<R: Rotation3<f32>>(&self, c: Point3<f32>, r: R) -> Self {
+        let a = r.rotate_vector(self.a - c) + c.to_vec();
+        let d = r.rotate_vector(self.b - self.a);
+        let b = a + d;
+        Segment {
+            a: Point3::from_vec(a),
+            b: Point3::from_vec(b)
+        }
+    }
+
 }
 
 /// A type that is composed of vertices, edges and has a face.

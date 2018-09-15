@@ -110,7 +110,6 @@
 //! // Solve the collision:
 //! solver.solve(&mut rigid_bodies, SOLVER_ITERS);
 //! ```
-
 #[macro_use]
 pub extern crate cgmath;
 extern crate smallvec;

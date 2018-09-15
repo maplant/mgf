@@ -14,6 +14,7 @@
 // along with MGF. If not, see <http://www.gnu.org/licenses/>.
 
 use std::ops::{Add, Sub, Mul, Div};
+use std::f32;
 use cgmath::{EuclideanSpace, InnerSpace, Point3, Vector3, Zero};
 
 use geom::*;
@@ -186,6 +187,15 @@ impl BoundedBy<AABB> for Capsule {
     }
 }
 
+impl BoundedBy<AABB> for OBB {
+    fn bounds(&self) -> AABB {
+        AABB {
+            c: self.c,
+            r: self.r,
+        }.rotate(self.q)
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Spheres satisfy Bound
@@ -293,6 +303,16 @@ impl BoundedBy<Sphere> for Capsule {
         let r = self.r + self.d.magnitude() * 0.5;
         Sphere {
             c: self.a + self.d*0.5,
+            r,
+        }
+    }
+}
+
+impl BoundedBy<Sphere> for OBB {
+    fn bounds(&self) -> Sphere {
+        let r = self.r.x.max(self.r.y.max(self.r.z));
+        Sphere {
+            c: self.c,
             r,
         }
     }
