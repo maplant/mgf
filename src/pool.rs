@@ -124,8 +124,27 @@ impl<T> Pool<T> {
     pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item=(usize, &'a mut T)> { 
         self.into_iter()
     }
-}
 
+    /// Returns a reference to an object at the given index and None if it is
+    /// unoccupied.
+    pub fn get<'a>(&'a self, i: usize) -> Option<&'a T> {
+        if let Some(PoolEntry::Occupied(ref item)) = self.entries.get(i) {
+            Some(&item)
+        } else {
+            None
+        }
+    }
+
+    /// Returns a mutable reference to an object at the given index and None if
+    /// it is unoccupied.
+    pub fn get_mut<'a>(&'a mut self, i: usize) -> Option<&'a mut T> {
+        if let Some(PoolEntry::Occupied(ref mut item)) = self.entries.get_mut(i) {
+            Some(item)
+        } else {
+            None
+        }
+    }
+}
 
 impl<T> Index<usize> for Pool<T> {
     type Output = T;
