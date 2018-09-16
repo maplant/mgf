@@ -412,8 +412,8 @@ where
             s1: self,
             s2: rhs,
         };
-        let first_support: Point3<f32> = diff.support(d);
-        let mut simp = Simplex::from(first_support);
+        let inits: (SupportPoint, SupportPoint) = (diff.support(d), diff.support(-d));
+        let mut simp = Simplex::from(inits);
         let min_dist = simp.closest_point_to_origin(&diff).to_vec();
         let mag2 = min_dist.magnitude2();
         if mag2 < COLLISION_EPSILON {
@@ -499,15 +499,14 @@ where
     ShapeA: Convex + Volumetric,
     ShapeB: Convex + Volumetric,
 {
-    //    fn contacts(&self, rhs: &ShapeB) -> Option<Contact> {
     fn contacts<F: FnMut(Contact)>(&self, rhs: &ShapeB, mut callback: F) -> bool {
-        let d = Vector3::new(1.0, 0.0, 0.0);
+        let d = Vector3::new(0.0, 1.0, 0.0);
         let diff = MinkowskiDiff {
             s1: self,
             s2: rhs,
         };
-        let first_support: SupportPoint = diff.support(d);
-        let mut simp = Simplex::from(first_support);
+        let inits: (SupportPoint, SupportPoint) = (diff.support(d), diff.support(-d));
+        let mut simp = Simplex::from(inits);
         let min_dist = simp.closest_point_to_origin(&diff).to_vec();
         let mag2 = min_dist.magnitude2();
         if mag2 > COLLISION_EPSILON {
@@ -1724,6 +1723,7 @@ mod tests {
             assert_eq!(collision.t, 1.0);
             assert_eq!(collision.a, Point3::new(-1.0, 0.0, 0.0));
             assert_eq!(collision.b, Point3::new(-1.0, 0.0, 0.0));
+            assert_eq!(collision.n, Vector3::new(1.0, 0.0, 0.0));
         }
 
          #[test]
@@ -1842,6 +1842,35 @@ mod tests {
                 assert_eq!(c.t, 1.0);
                 assert_eq!(c.n, Vector3::new(0.0, 1.0, 0.0));
             }));
+        }
+    }
+
+    mod obbs {
+        use cgmath::{Point3, Vector3, Quaternion, One};
+        use geom::OBB;
+        use collision::{Contacts, Contact};
+
+        #[test]
+        fn test_obb_collision() {
+            let box1 = OBB::new(Point3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0), Quaternion::one());
+            let box2 = OBB::new(Point3::new(0.0, 1.0, 0.0), Vector3::new(1.0, 1.5, 1.0), Quaternion::one());
+            let collision: Contact = box1.last_contact(&box2).unwrap();
+            assert_eq!(collision.a.y, 1.0);
+            assert_eq!(collision.b.y, -0.5);
+            let collision: Contact = box2.last_contact(&box1).unwrap();
+            assert_eq!(collision.b.y, 1.0);
+            assert_eq!(collision.a.y, -0.5);
+            let box3 = OBB::new(Point3::new(0.0, 4.1, 0.0), Vector3::new(1.0, 1.5, 1.0), Quaternion::one());
+            assert!(box1.last_contact(&box3).is_none());
+            let box4 = OBB::new(Point3::new(0.0, 2.0, 0.0), Vector3::new(1.7, 1.5, 1.0),
+                                Quaternion::from_arc(
+                                    Vector3::new(1.0, 0.0, 0.0),
+                                    Vector3::new(0.0, 1.0, 0.0),
+                                    None
+                                ));
+            let collision: Contact = box1.last_contact(&box4).unwrap();
+            assert_eq!(collision.a.y, 1.0);
+            assert_eq!(collision.b.y, 0.30000007);
         }
     }
 

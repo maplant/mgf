@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file, following
 the format defined at [keepachangelog.com](http://keepachangelog.com/).
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [v1.2.0] - 2018-09-15
+
+Discrete collision detection has been added, although at the moment it is 
+limited to convex object collisions. That means stationary objects that only 
+implement convex cannot collide with certain primitives, such as triangles and 
+planes.
+
+- Added a type parameter to `Convex` in order to allow for points that include extra information.
+- Added `SupportPoint` for storing local support points during GJK.
+- Added `rotate_around` method to trait `Particle`.
+- Added `OBB` object to represent abitrarily oriented bounding boxes.
+- Expanded `Simplex` to take a type parameter indicating the desired point type.
+- Added `new` support functions to geometries. 
+- Fixed a major bug in the `Triangle` implementation of `closest_point`.
+- Added convenience methods to `Pool`.
+
 ## [v1.1.0] - 2018-04-02
 
 A lot of work went into adding support for discrete collision detection. It is 

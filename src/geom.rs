@@ -33,6 +33,16 @@ pub struct Plane {
     pub d: f32,
 }
 
+impl Plane {
+    /// Create a new plane.
+    pub fn new(n: Vector3<f32>, d: f32) -> Self {
+        Plane {
+            n,
+            d
+        }
+    }
+}
+
 impl From<(Point3<f32>, Point3<f32>, Point3<f32>)> for Plane {
     fn from(p: (Point3<f32>, Point3<f32>, Point3<f32>)) -> Self {
         let (a, b, c) = p;
@@ -53,6 +63,24 @@ pub struct Ray {
     pub d: Vector3<f32>,
 }
 
+impl Ray {
+    /// Create a new ray.
+    pub fn new(origin: Point3<f32>, dir: Vector3<f32>) -> Self {
+        Ray {
+            p: origin,
+            d: dir,
+        }
+    }
+
+    /// Clamp a ray's distance to create a segment.
+    pub fn clamp(&self, t: f32) -> Segment {
+        Segment {
+            a: self.p,
+            b: self.p + self.d * t,
+        }
+    }
+}
+
 /// A point and a direction with a finite distance.
 #[derive(Copy, Clone, Debug)]
 pub struct Segment {
@@ -61,6 +89,16 @@ pub struct Segment {
     /// The end point of the segment.
     pub b: Point3<f32>,
 }
+
+impl Segment {
+    /// Create a new segment
+    pub fn new(from: Point3<f32>, to: Point3<f32>) -> Self {
+        Segment {
+            a: from,
+            b: to 
+        }
+    }
+}               
 
 impl From<(Point3<f32>, Point3<f32>)> for Segment {
     fn from(p: (Point3<f32>, Point3<f32>)) -> Self {
@@ -92,11 +130,22 @@ pub struct Triangle {
 }
 
 impl Triangle {
+    /// Create a new triangle.
+    pub fn new(a: Point3<f32>, b: Point3<f32>, c: Point3<f32>) -> Self {
+        Triangle {
+            a: a.to_vec(),
+            b: b.to_vec(),
+            c: c.to_vec(),
+        }
+    }
+
+    /// Calculates the normal vector of a triangle. This is not cached.
     pub fn normal(&self) -> Vector3<f32> {
         (self.b - self.a).cross(self.c - self.a).normalize()
     }
 
-    pub fn barycentric(&self, p: Point3<f32>) -> ( f32, f32, f32 ) {
+    /// Find the barycentric co-ordinates for a given point.
+    pub fn barycentric(&self, p: Point3<f32>) -> (f32, f32, f32) {
         let v0 = self.b - self.a;
         let v1 = self.c - self.a;
         let v2 = p.to_vec() - self.a;
@@ -160,10 +209,23 @@ impl From<(Point3<f32>, Point3<f32>, Point3<f32>, Point3<f32>)> for Tetrahedron 
 pub struct Rectangle {
     /// The center of the rectangle.
     pub c: Point3<f32>,
-    /// The directions of the rectangle.
+    /// The directions of the rectangle. Must be normalized.
     pub u: [Vector3<f32>; 2],
     /// Half the lengths of each side of the rectangle.
     pub e: [f32; 2],
+}
+
+impl Rectangle {
+    /// Create a new rectangle.
+    pub fn new(center: Point3<f32>, axis: [Vector3<f32>; 2]) -> Self {
+        let e = [ axis[0].magnitude(), axis[1].magnitude() ];
+        let u = [ axis[0] / e[0], axis[1] / e[1] ];
+        Rectangle {
+            c: center,
+            u,
+            e
+        }
+    }
 }
 
 pub type Rect = Rectangle;
@@ -189,12 +251,26 @@ pub struct AABB {
     pub r: Vector3<f32>,
 }
 
+impl AABB {
+    /// Create a new AABB.
+    pub fn new(c: Point3<f32>, r: Vector3<f32>) -> Self {
+        AABB{ c, r }
+    }
+}
+
 /// An arbitrarily oriented bounding box.
 #[derive(Copy, Clone, Debug)]
 pub struct OBB {
     pub c: Point3<f32>,
     pub q: Quaternion<f32>,
     pub r: Vector3<f32>,
+}
+
+impl OBB {
+    /// Create a new OBB.
+    pub fn new(c: Point3<f32>, r: Vector3<f32>, q: Quaternion<f32>) -> Self {
+        OBB{ c, r, q }
+    }
 }
 
 /// A point and a distance.
@@ -206,6 +282,17 @@ pub struct Sphere {
     pub c: Point3<f32>,
     /// The radius of the sphere.
     pub r: f32,
+}
+
+impl Sphere {
+    /// Create a new sphere.
+    pub fn new(center: Point3<f32>, radius: f32) -> Self {
+        assert!(radius > 0.0);
+        Sphere {
+            c: center,
+            r: radius,
+        }
+    }
 }
 
 /// A sphere swept along a line.
@@ -222,6 +309,18 @@ pub struct Capsule {
     pub d: Vector3<f32>,
     /// Radius of the sphere.
     pub r: f32,
+}
+
+impl Capsule {
+    /// Create a new capsule from a segment and a radius.
+    pub fn new(segment: Segment, radius: f32) -> Self {
+        assert!(radius > 0.0);
+        Capsule {
+            a: segment.a,
+            d: segment.a - segment.b,
+            r: radius,
+        }
+    }
 }
 
 impl From<Capsule> for Segment {
@@ -745,7 +844,7 @@ impl Shape for Triangle {
         let ab = self.b - self.a;
         let ac = self.c - self.a;
         let ap = to.to_vec() - self.a;
-        let d1 = ab.dot(ab);
+        let d1 = ab.dot(ap);
         let d2 = ac.dot(ap);
         if d1 <= 0.0 && d2 <= 0.0 {
             return Point3::from_vec(self.a);
@@ -874,10 +973,12 @@ impl Shape for OBB {
 
     fn closest_point(&self, to: Point3<f32>) -> Point3<f32> {
         let to = self.q.invert().rotate_point(to);
-        Point3::new(
-            clamp(to.x, self.c.x - self.r.x, self.c.x + self.r.x),
-            clamp(to.y, self.c.y - self.r.y, self.c.y + self.r.y),
-            clamp(to.z, self.c.z - self.r.z, self.c.z + self.r.z),
+        self.q.rotate_point(
+            Point3::new(
+                clamp(to.x, self.c.x - self.r.x, self.c.x + self.r.x),
+                clamp(to.y, self.c.y - self.r.y, self.c.y + self.r.y),
+                clamp(to.z, self.c.z - self.r.z, self.c.z + self.r.z),
+            )
         )
     }
 }
@@ -1178,10 +1279,12 @@ impl Convex for AABB {
 impl Convex for OBB {
     fn support(&self, d: Vector3<f32>) -> Point3<f32> {
         let d = self.q.invert().rotate_vector(d);
-        Point3::new(
-            d.x.signum() * self.r.x,
-            d.y.signum() * self.r.y,
-            d.z.signum() * self.r.z
+        self.q.rotate_point(
+            Point3::new(
+                d.x.signum() * self.r.x,
+                d.y.signum() * self.r.y,
+                d.z.signum() * self.r.z
+            )
         ) + self.c.to_vec()
     }
 }
@@ -1192,6 +1295,8 @@ impl Convex for Sphere {
     }
 }
 
+/// A point that stores the local support points as well as the Minkowski
+/// difference.
 #[derive(Copy, Clone, Debug)]
 pub struct SupportPoint {
     pub p: Point3<f32>,
@@ -1261,4 +1366,22 @@ pub fn compute_basis(n: &Vector3<f32>) -> [Vector3<f32>; 2] {
         Vector3::new(0.0, n.z, -n.y)
     }.normalize();
     [b, n.cross(b)]
+}
+
+#[cfg(test)]
+mod tests {
+    mod triangle {
+        use cgmath::{Point3, EuclideanSpace, InnerSpace};
+        use geom::{Triangle, Shape, COLLISION_EPSILON};
+
+        #[test]
+        fn test_tri_closest_pt() {
+            let tri = Triangle::new(
+                Point3::new(2.0, 3.5, 0.0),
+                Point3::new(-2.0, -1.5, 0.0),
+                Point3::new(2.0, -1.5, 0.0)
+            );
+            assert!(tri.closest_point(Point3::new(0.0, 0.0, 0.0)).to_vec().magnitude2() < COLLISION_EPSILON);
+        }
+    }
 }

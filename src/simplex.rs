@@ -173,7 +173,7 @@ where
         let mut prev_norm = Vector3::zero();
         loop {
             let (min_norm, next_state) = self.state.min_norm(&mut self.points);
-            if min_norm.magnitude2() < COLLISION_EPSILON {
+            if min_norm.magnitude2() < COLLISION_EPSILON  {
                 // If the simplex is not a tetrahedron, we want to sample more 
                 // axis until it is one.
                 for i in self.state.len()..4 {
@@ -188,7 +188,7 @@ where
             let support = shape.support(-min_norm.normalize());
             let support_v = support.into().to_vec();
             prev_norm = min_norm;
-            if min_norm.magnitude2() == support_v.magnitude2() {
+            if min_norm.magnitude2() >= support_v.magnitude2() {
                 return Point3::from_vec(min_norm);
             }
             self.state = next_state;
@@ -266,10 +266,13 @@ where
     Point: Into<Point3<f32>> + Copy + Clone + 'static
 {
     fn min_norm(&self, simp: &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>) {
-        let ab = simp[1].into() - simp[0].into();
-        let ac = simp[2].into() - simp[0].into();
-        let ap = -simp[0].into().to_vec();
-        let d1 = ab.dot(ab);
+        let (a, b, c): (Point3<f32>, Point3<f32>, Point3<f32>) = (
+            simp[0].into(), simp[1].into(), simp[2].into()
+        );
+        let ab = b - a;
+        let ac = c - a;
+        let ap = -a.to_vec();
+        let d1 = ab.dot(ap);
         let d2 = ac.dot(ap);
 
         // Vertex region A
@@ -278,7 +281,7 @@ where
         }
 
         // Vertex region B
-        let bp = -simp[1].into().to_vec();
+        let bp = -b.to_vec();
         let d3 = ab.dot(bp);
         let d4 = ac.dot(bp);
         if d3 >= 0.0 && d4 <= d3 {
@@ -294,7 +297,7 @@ where
         }
 
         // Vertex region C
-        let cp = -simp[2].into().to_vec();
+        let cp = -c.to_vec();
         let d5 = ab.dot(cp);
         let d6 = ac.dot(cp);
         if d6 >= 0.0 && d5 <= d6 {
@@ -496,7 +499,7 @@ impl Simplex<SupportPoint> {
                 return Contact {
                     a: Point3::from_vec(a),
                     b: Point3::from_vec(a - closest_dist*closest_n),
-                    n: -closest_n,
+                    n: closest_n,
                     t: 0.0
                 };
             }
