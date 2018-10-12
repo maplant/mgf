@@ -6,8 +6,8 @@ license = "LGPL-3.0"
 description = "A 3D collision and physics framework for video games."
 
 documentation = "https://docs.rs/mgf"
-homepage = "https://github.com/DataAnalysisCosby/mgf"
-repository = "https://github.com/DataAnalysisCosby/mgf"
+homepage = "https://github.com/maplant/mgf"
+repository = "https://github.com/maplant/mgf"
 readme = "README.md"
 
 keywords = [ "3D", "physics", "collision", "math", "gamedev" ]
