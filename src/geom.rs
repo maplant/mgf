@@ -1295,6 +1295,28 @@ impl Convex for Sphere {
     }
 }
 
+impl Convex for Capsule {
+    fn support(&self, d: Vector3<f32>) -> Point3<f32> {
+        // I have yet to find an implementation of this that I believe to be
+        // correct, so for now I'm just going to use the version I found
+        // in ncollide, because the version in bullet 3d is just completely
+        // wrong.
+        let rot = Quaternion::from_arc(self.d,
+                                       Vector3::new(1.0, 0.0, 0.0),
+                                       None);
+        let local_d = rot.rotate_vector(d);
+        rot.invert().rotate_point(
+            Point3::from_vec(
+                if local_d.x < 0.0 {
+                    Vector3::new(-self.d.magnitude(), 0.0, 0.0)
+                } else {
+                    Vector3::new(self.d.magnitude(), 0.0, 0.0)
+                } + local_d * self.r
+            )
+        )
+    }
+}
+
 /// A point that stores the local support points as well as the Minkowski
 /// difference.
 #[derive(Copy, Clone, Debug)]

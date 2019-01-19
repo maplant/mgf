@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file, following
 the format defined at [keepachangelog.com](http://keepachangelog.com/).
-This project adheres to [Semantic Versioning](http://semver.org/).
+This project adheres to [Semantic Versioning](http://semver.org/). 
+
+## [v1.2.2] - 2019-01-18
+
+- Implemented `Convex` for `Capsule`. I have no idea if this is correct at all,
+  hopefully will add some unit tests soon.
+- Update cgmath version to 0.17.
 
 ## [v1.2.0] - 2018-09-15
 
