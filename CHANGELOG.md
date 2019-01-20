@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file, following
 the format defined at [keepachangelog.com](http://keepachangelog.com/).
 This project adheres to [Semantic Versioning](http://semver.org/). 
 
+## [v1.2.3] - 2019-01-20
+
+- Fix bug in `Convex` implementation for `Capsule`
+- Fix bug in `new` method for `Capsule`
+
 ## [v1.2.2] - 2019-01-18
 
 - Implemented `Convex` for `Capsule`. I have no idea if this is correct at all,

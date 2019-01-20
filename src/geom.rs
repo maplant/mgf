@@ -317,7 +317,7 @@ impl Capsule {
         assert!(radius > 0.0);
         Capsule {
             a: segment.a,
-            d: segment.a - segment.b,
+            d: segment.b - segment.a,
             r: radius,
         }
     }
@@ -1299,21 +1299,17 @@ impl Convex for Capsule {
     fn support(&self, d: Vector3<f32>) -> Point3<f32> {
         // I have yet to find an implementation of this that I believe to be
         // correct, so for now I'm just going to use the version I found
-        // in ncollide, because the version in bullet 3d is just completely
-        // wrong.
-        let rot = Quaternion::from_arc(self.d,
-                                       Vector3::new(1.0, 0.0, 0.0),
-                                       None);
-        let local_d = rot.rotate_vector(d);
-        rot.invert().rotate_point(
-            Point3::from_vec(
-                if local_d.x < 0.0 {
-                    Vector3::new(-self.d.magnitude(), 0.0, 0.0)
-                } else {
-                    Vector3::new(self.d.magnitude(), 0.0, 0.0)
-                } + local_d * self.r
-            )
-        )
+        // for a cylinder and add the radius to the end.
+        use cgmath::Zero;
+        let c = self.a + self.d * 0.5;
+        let u = self.d.normalize();
+        let ud = u.dot(d);
+        let w = d - u * ud;
+        if w.is_zero() {
+            c + (self.d.magnitude() * 0.5 + self.r) * u * ud.signum()
+        } else {
+            c + (self.d.magnitude() * 0.5 + self.r) * u * ud.signum() + w.normalize() * self.r
+        }
     }
 }
 
@@ -1404,6 +1400,18 @@ mod tests {
                 Point3::new(2.0, -1.5, 0.0)
             );
             assert!(tri.closest_point(Point3::new(0.0, 0.0, 0.0)).to_vec().magnitude2() < COLLISION_EPSILON);
+        }
+    }
+
+    mod convex {
+        use cgmath::{Vector3, Point3};
+        use geom::*;
+
+        #[test]
+        fn test_capsule_support_fn() {
+            let capsule = Capsule::new(Segment::new(Point3::new(2.0, 0.0, 0.0), Point3::new(4.0, 0.0, 0.0)), 1.0);
+            assert_eq!(capsule.support(Vector3::new(0.0, 1.0, 0.0)), Point3::new(5.0, 1.0, 0.0));
+            assert_eq!(capsule.support(Vector3::new(-1.0, 0.0, 0.0)), Point3::new(1.0, 0.0, 0.0));
         }
     }
 }
