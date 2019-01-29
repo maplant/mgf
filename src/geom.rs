@@ -26,6 +26,7 @@ pub const COLLISION_EPSILON: f32 = 0.000001;
 
 /// A normal vector and a distance.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Plane {
     /// The normal vector of the plane.
     pub n: Vector3<f32>,
@@ -56,6 +57,7 @@ impl From<(Point3<f32>, Point3<f32>, Point3<f32>)> for Plane {
 
 /// A point and a direction with infinite distance.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ray {
     /// The origin of the ray.
     pub p: Point3<f32>,
@@ -83,6 +85,7 @@ impl Ray {
 
 /// A point and a direction with a finite distance.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Segment {
     /// The starting point of the segment.
     pub a: Point3<f32>,
@@ -119,6 +122,7 @@ impl From<Segment> for Ray {
 }
 /// Three points in space.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Triangle {
     // TODO: There's no point in making these Vectors. Horribly inconsistent.
     /// The first point in the triangle.
@@ -206,6 +210,7 @@ impl From<(Point3<f32>, Point3<f32>, Point3<f32>, Point3<f32>)> for Tetrahedron 
 
 /// A center point, two directions, and two half widths.
 #[derive(Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rectangle {
     /// The center of the rectangle.
     pub c: Point3<f32>,
@@ -246,6 +251,7 @@ impl Into<Plane> for Rectangle {
 /// AABBs being closed means that a point lying on the surface of the AABB is
 /// considered contained by the AABB.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AABB {
     pub c: Point3<f32>,
     pub r: Vector3<f32>,
@@ -260,6 +266,7 @@ impl AABB {
 
 /// An arbitrarily oriented bounding box.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OBB {
     pub c: Point3<f32>,
     pub q: Quaternion<f32>,
@@ -277,6 +284,7 @@ impl OBB {
 ///
 /// Like AABBs, spheres are closed volumes.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Sphere {
     /// The center point of the sphere.
     pub c: Point3<f32>,
@@ -302,6 +310,7 @@ impl Sphere {
 ///
 /// A capsule can be constructed from a `Moving<Sphere>`
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Capsule {
     /// The starting point of the segment sweeping the sphere
     pub a: Point3<f32>,
@@ -342,6 +351,7 @@ impl From<Moving<Sphere>> for Capsule {
 
 /// A geometry swept accross a given path of motion.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Moving<T: Shape>(pub T, pub Vector3<f32>);
 
 impl<T: Copy + Clone + Shape> Moving<T> {
@@ -736,7 +746,6 @@ impl Shape for Plane {
 
 impl_shape_reqs!(Ray, p);
 
-
 impl Shape for Ray {
     fn center(&self) -> Point3<f32> {
         self.p
@@ -887,48 +896,6 @@ impl Shape for Triangle {
         Point3::from_vec(self.a + ab * v + ac * w)
     }
 }
-
-/*
-impl Add<Vector3<f32>> for Tetrahedron {
-    type Output = Self;
-
-    fn add(self, v: Vector3<f32>) -> Tetrahedron {
-        Tetrahedron{ a: self.a + v, b: self.b + v, c: self.c + v, d: self.d + v }
-    }
-}
-
-impl Sub<Vector3<f32>> for Tetrahedron {
-    type Output = Self;
-
-    fn sub(self, v: Vector3<f32>) -> Tetrahedron {
-        Tetrahedron{ a: self.a - v, b: self.b - v, c: self.c - v, d: self.d - v }
-    }
-}
-
-impl AddAssign<Vector3<f32>> for Tetrahedron {
-    fn add_assign(&mut self, v: Vector3<f32>) {
-        self.a += v;
-        self.b += v;
-        self.c += v;
-        self.d += v;
-    }
-}
-
-impl SubAssign<Vector3<f32>> for Tetrahedron {
-    fn sub_assign(&mut self, v: Vector3<f32>) {
-        self.a -= v;
-        self.b -= v;
-        self.c -= v;
-        self.d -= v;
-    }
-}
-
-impl Shape for Tetrahedron {
-    fn center(&self) -> Point3<f32> {
-        Point3::from_vec((self.a + self.b + self.c + self.d) / 4.0)
-    }
-}
-*/
 
 impl_shape_reqs!(Rectangle, c);
 

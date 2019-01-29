@@ -114,6 +114,10 @@
 pub extern crate cgmath;
 extern crate smallvec;
 
+#[cfg(feature = "serde")]
+#[macro_use]
+extern crate serde;
+
 mod bvh;
 pub use bvh::*;
 

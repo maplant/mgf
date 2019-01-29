@@ -1,6 +1,6 @@
 [package]
 name = "mgf"
-version = "1.2.3"
+version = "1.2.4"
 authors = ["Matthew Plant <maplant95@gmail.com>"]
 license = "LGPL-3.0"
 description = "A 3D collision and physics framework for video games."
@@ -18,3 +18,7 @@ name = "mgf"
 [dependencies]
 cgmath = "0.17"
 smallvec = "0.6"
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+[target.'cfg(feature="serde")'.dependencies]
+cgmath = { version = "0.17", features = ["serde"] }
