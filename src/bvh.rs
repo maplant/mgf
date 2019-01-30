@@ -23,10 +23,30 @@ use pool::Pool;
 
 use collision::{Intersects, Intersection};
 
+#[cfg(feature = "serde")]
+use serde::ser::{Serialize, SerializeTupleVariant, SerializeStruct, Serializer};
+
 /// A Bounding Volume Hierarchy.
 pub struct BVH<B: Bound, V> {
     root: usize,
     pool: Pool<BVHNode<B, V>>,
+}
+
+#[cfg(feature = "serde")]
+impl<B, V> Serialize for BVH<B, V>
+where
+    B: Bound + Serialize,
+    V: Serialize
+{    
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut node = serializer.serialize_struct("BVH", 2)?;
+        node.serialize_field("root", &self.root)?;
+        node.serialize_field("pool", &self.pool)?;
+        node.end()
+    }
 }
 
 struct BVHNode<B: Bound, V> {
@@ -36,11 +56,50 @@ struct BVHNode<B: Bound, V> {
     node_type: BVHNodeType<V>,
 }
 
+#[cfg(feature = "serde")]
+impl<B, V> Serialize for BVHNode<B, V>
+where
+    B: Bound + Serialize,
+    V: Serialize
+{    
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut node = serializer.serialize_struct("BVHNode", 4)?;
+        node.serialize_field("height", &self.height)?;
+        node.serialize_field("parent", &self.parent)?;
+        node.serialize_field("bounds", &self.bounds)?;
+        node.serialize_field("node_type", &self.node_type)?;
+        node.end()
+    }
+}
+
 enum BVHNodeType<V> {
     Leaf(V),
     Parent(usize, usize),
 }
 
+#[cfg(feature = "serde")]
+impl<V> Serialize for BVHNodeType<V>
+where
+    V: Serialize
+{    
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            BVHNodeType::Leaf(ref v) => serializer.serialize_newtype_variant("BVHNodeType", 0, "Leaf", v),
+            BVHNodeType::Parent(l, r) => {
+                let mut tv = serializer.serialize_tuple_variant("BVHNodeType", 1, "Parent", 3)?;
+                tv.serialize_field(l)?;
+                tv.serialize_field(r)?;
+                tv.end()
+            }
+        }
+    }
+}               
 
 impl<B, V> Clone for BVH<B, V>
 where

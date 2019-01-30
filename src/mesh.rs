@@ -26,6 +26,7 @@ use cgmath::{Vector3, Point3, Zero, Rotation3};
 /// A triangle mesh is a set of triangles that forms some sort of mesh. There
 /// are no requirements on the convexivity of the mesh.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Mesh {
     pub x: Vector3<f32>,
     pub verts: Vec<Point3<f32>>,
@@ -137,6 +138,7 @@ where
 
 /// A closed convex mesh. Represented by a point soup.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ConvexMesh {
     pub x: Vector3<f32>,
     pub sum: Vector3<f32>,
