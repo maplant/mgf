@@ -4,10 +4,14 @@ All notable changes to this project will be documented in this file, following
 the format defined at [keepachangelog.com](http://keepachangelog.com/).
 This project adheres to [Semantic Versioning](http://semver.org/). 
 
+## [v1.2.5] - 2019-01-30
+
+- Add serialization support for `Mesh`, `Pool`, and `BVH`.
+
 ## [v1.2.4] - 2019-01-29
 
 - Add serialization support for geom objects.
-[
+
 ## [v1.2.3] - 2019-01-20
 
 - Fix bug in `Convex` implementation for `Capsule`.

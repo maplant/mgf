@@ -19,15 +19,8 @@ use std::iter::{Enumerate, FilterMap};
 use std::ops::{Index, IndexMut};
 use std::vec::Vec;
 
-#[cfg(feature = "serde")]
-use serde::ser::{
-    Serialize,
-    SerializeStruct,
-    SerializeStructVariant,
-    Serializer
-};
-
 /// Internal storage type used by Pool.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PoolEntry<T> {
     FreeListEnd,
     FreeListPtr {
@@ -36,29 +29,9 @@ pub enum PoolEntry<T> {
     Occupied(T)
 }
 
-#[cfg(feature = "serde")]
-impl<T> Serialize for PoolEntry<T>
-where
-    T: Serialize
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            PoolEntry::FreeListEnd => serializer.serialize_unit_variant("PoolEntry", 0, "FreeListEnd"),
-            PoolEntry::FreeListPtr{ ref next_free } => {
-                let mut sv = serializer.serialize_struct_variant("PoolEntry", 1, "FreeListPtr", 1)?;
-                sv.serialize_field("next_free", next_free)?;
-                sv.end()
-            },
-            PoolEntry::Occupied(ref t) => serializer.serialize_newtype_variant("PoolEntry", 2, "Occupied", t)
-        }
-    }
-}
-
 /// Growable array type that allows items to be removed and inserted without
 /// changing the indices of other entries.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Pool<T> {
     len: usize,
     free_list: Option<usize>,
@@ -172,23 +145,6 @@ impl<T> Pool<T> {
         } else {
             None
         }
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<T> Serialize for Pool<T>
-where
-    T: Serialize
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut pool = serializer.serialize_struct("Pool", 3)?;
-        pool.serialize_field("len", &self.len)?;
-        pool.serialize_field("free_list", &self.free_list)?;
-        pool.serialize_field("entries", &self.entries)?;
-        pool.end()
     }
 }
         
