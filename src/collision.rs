@@ -518,33 +518,6 @@ where
     }
 }
 
-/*
-default impl<ShapeA, ShapeB> Contacts<Moving<ShapeB>> for Moving<ShapeA>
-where
-    ShapeA: Convex + Volumetric,
-    ShapeB: Convex + Volumetric,
-{
-    //    fn contacts(&self, rhs: &ShapeB) -> Option<Contact> {
-    fn contacts<F: FnMut(Contact)>(&self, rhs: &Moving<ShapeB>, mut callback: F) -> bool {
-        let d = Vector3::new(1.0, 0.0, 0.0);
-        let diff = MinkowskiDiff {
-            s1: self.0,
-            s2: rhs.0,
-        };
-        let first_support: SupportPoint = diff.support(d);
-        let mut simp = Simplex::from(first_support);
-        let min_dist = simp.closest_point_to_origin(&diff).to_vec();
-        let mag2 = min_dist.magnitude2();
-        if mag2 > COLLISION_EPSILON {
-            false
-        } else {
-            callback(simp.compute_contact(self.0, rhs.0));
-            true
-        }
-    }
-}
-*/
-
 impl Contacts<Moving<Sphere>> for Plane {
     fn contacts<F: FnMut(Contact)>(&self, sphere: &Moving<Sphere>, mut callback: F) -> bool {
         let &Moving(s, v) = sphere;
@@ -582,9 +555,9 @@ impl Contacts<Moving<Sphere>> for Plane {
 impl Contacts<Moving<Capsule>> for Plane {
     fn contacts<F: FnMut(Contact)>(&self, capsule: &Moving<Capsule>, mut callback: F) -> bool {
         // The closest point on a line segment relative to a plane is always
-        // either all of the points, if the line is parallel to the plane
-        // one of the end points, if the line is not parallel, or
-        // a point in the line segment, if the the line is collideing the
+        // either all of the points if the line is parallel to the plane,
+        // one of the end points if the line is not parallel, or
+        // a point in the line segment if the the line is colliding with the
         // plane.
         // This does not change if the line segment is translated in any way.
         // Thus, we can use line - plane collision to determine our closest
@@ -602,6 +575,7 @@ impl Contacts<Moving<Capsule>> for Plane {
         } else {
             let t = (self.d - self.n.dot(c.a.to_vec())) / denom;
             // TODO: Fix this
+            // TODO: Remember what I needed to fix. Add epsilons maybe?
             if t > 1.0 {
                 c.a + c.d
             } else if t < 0.0 {
@@ -916,15 +890,11 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
         }
         // Intersect the Minkowski sum of the triangle and the capsule with
         // the ray originating at the capsule's origin.
-        // Unfortunately, we have to use an vector here because rust does not
-        // support stack allocation if we want to support any number of
-        // edges. In order to subvert that as much as possilbe we're using
-        // a pool Block64 as a bitset.
+        // In order to improve the performance of this calculation we use a fixed
+        // size bitset composed of a single u64.
         // Thus, any face that wishes to compute here may only have 64
         // vertices (for now). Hopefully this will change when generic constants
         // are added.
-        // Honestly, that is a rather reasonable requirement. I'm certainly
-        // never going to use more than four.
         if Poly::NUM_VERTICES > 64 {
             return false;
         }
@@ -936,7 +906,6 @@ impl<Poly: Polygon> Contacts<Moving<Capsule>> for Poly  {
             Point3::new(0.0,0.0,0.0),
             Point3::new(0.0,0.0,0.0)
         );
-        //        let mut second_contact: Option<Contact> = None;
         for edge_i in 0..Poly::NUM_VERTICES {
             let (a, b) = self.edge(edge_i);
             let edge_a = self.vertex(a);
