@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file, following
 the format defined at [keepachangelog.com](http://keepachangelog.com/).
 This project adheres to [Semantic Versioning](http://semver.org/). 
 
+## [v1.3.0] - 2019-02-14
+
+- Implemented `Inertia` for `OBB`.
+
+- This version dramatically changes the way moment of inertia tensors are 
+  calculated, and is therefore a breaking change. In order to make it easier
+  to sum inertia tensors in compound objects, the outerproduct of the 
+  displacement of an object is now taken into account when calculating the 
+  tensor. Therefore, the moment of inertia tensor will vary depending on the 
+  center of an object. In order to get the tensor as produced before, set the 
+  position of an object to the origin.
+
 ## [v1.2.5] - 2019-01-30
 
 - Add serialization support for `Mesh`, `Pool`, and `BVH`.

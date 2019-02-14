@@ -15,8 +15,8 @@
 
 use std::f32;
 use std::slice::Iter;
-use cgmath::{InnerSpace, SquareMatrix, Matrix, Matrix3, Point3,
-             Quaternion, Vector3, Zero};
+use cgmath::{InnerSpace, SquareMatrix, EuclideanSpace, Matrix, Matrix3, Point3,
+             Quaternion, Vector3, Zero, One};
 
 use compound::*;
 use geom::*;
@@ -30,7 +30,18 @@ pub trait Inertia {
 impl Inertia for Sphere {
     fn tensor(&self, m: f32) -> Matrix3<f32> {
         let i = 0.4 * m * self.r * self.r;
-        Matrix3::new(i, 0.0, 0.0, 0.0, i, 0.0, 0.0, 0.0, i)
+        let i = Matrix3::new(
+            i, 0.0, 0.0,
+            0.0, i, 0.0,
+            0.0, 0.0, i
+        );
+        let disp = self.c.to_vec();
+        let outer = Matrix3::from_cols(
+            disp * disp.x,
+            disp * disp.y,
+            disp * disp.z
+        );
+        i + m * (Matrix3::one() * disp.dot(disp) - outer)
     }
 }
 
@@ -57,7 +68,18 @@ impl Inertia for Capsule {
         let dst = self.d;
         let src = Vector3::new(0.0, 1.0, 0.0) * h;
         let rot = Matrix3::<f32>::from(Quaternion::from_arc(src, dst, None));
-        rot * Matrix3::new(i_x, 0.0, 0.0, 0.0, i_y, 0.0, 0.0, 0.0, i_z) * rot.transpose()
+        let i = rot * Matrix3::new(
+            i_x, 0.0, 0.0,
+            0.0, i_y, 0.0,
+            0.0, 0.0, i_z
+        ) * rot.transpose();
+        let disp = self.center().to_vec();
+        let outer = Matrix3::from_cols(
+            disp * disp.x,
+            disp * disp.y,
+            disp * disp.z
+        );
+        i + m * (Matrix3::one() * disp.dot(disp) - outer)
     }
 }
 
@@ -67,6 +89,33 @@ impl Inertia for Component {
             &Component::Sphere(s) => s.tensor(m),
             &Component::Capsule(c) => c.tensor(m),
         }
+    }
+}
+
+impl Inertia for OBB {
+    fn tensor(&self, m: f32) -> Matrix3<f32> {
+        // Thank you wikipedia
+        let (x, y, z) = (
+            self.r.x * 2.0,
+            self.r.y * 2.0,
+            self.r.z * 2.0
+        );
+        let i_x = 1.0 / 12.0 * m * (y * y + z * z);
+        let i_y = 1.0 / 12.0 * m * (x * x + z * z);
+        let i_z = 1.0 / 12.0 * m * (x * x + y * y);
+        let rot = Matrix3::<f32>::from(self.q);
+        let i = rot * Matrix3::new(
+            i_x, 0.0, 0.0,
+            0.0, i_y, 0.0,
+            0.0, 0.0, i_z
+        ) * rot.transpose();
+        let disp = self.center().to_vec();
+        let outer = Matrix3::from_cols(
+            disp * disp.x,
+            disp * disp.y,
+            disp * disp.z
+        );
+        i + m * (Matrix3::one() * disp.dot(disp) - outer)
     }
 }
 
@@ -264,3 +313,26 @@ impl ConstrainedSet<RigidBodyRef, Velocity, RigidBodyInfo> for RigidBodyVec {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    mod inertia {
+        #[test]
+        fn test_tensors() {
+            use cgmath::{Point3, Matrix3};
+            use geom::Sphere;
+            use physics::Inertia;
+
+            let s = Sphere{ c: Point3::new(0.0, 0.0, 0.0), r: 1.0 };
+            assert_eq!(
+                s.tensor(1.0),
+                Matrix3::new(
+                    0.4, 0.0, 0.0,
+                    0.0, 0.4, 0.0,
+                    0.0, 0.0, 0.4
+                )
+            );
+        }
+    }
+}
+            
