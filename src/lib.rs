@@ -119,36 +119,36 @@ extern crate smallvec;
 extern crate serde;
 
 mod bvh;
-pub use bvh::*;
+pub use crate::bvh::*;
 
 mod bounds;
-pub use bounds::*;
+pub use crate::bounds::*;
 
 pub mod bitset;
 
 mod compound;
-pub use compound::*;
+pub use crate::compound::*;
 
 mod collision;
-pub use collision::*;
+pub use crate::collision::*;
 
 mod solver;
-pub use solver::*;
+pub use crate::solver::*;
 
 mod geom;
-pub use geom::*;
+pub use crate::geom::*;
 
 mod manifold;
-pub use manifold::*;
+pub use crate::manifold::*;
 
 mod mesh;
-pub use mesh::*;
+pub use crate::mesh::*;
 
 mod physics;
-pub use physics::*;
+pub use crate::physics::*;
 
 mod pool;
-pub use pool::*;
+pub use crate::pool::*;
 
 mod simplex;
-pub use simplex::*;
+pub use crate::simplex::*;

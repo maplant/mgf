@@ -247,7 +247,7 @@ impl<'a, T> IntoIterator for &'a mut Pool<T> {
 #[cfg(test)]
 mod tests {
     mod pool {
-        use pool::*;
+        use crate::pool::*;
  
         #[test]
         fn test_manual_code() {

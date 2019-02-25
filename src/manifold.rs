@@ -20,8 +20,8 @@ use cgmath::prelude::*;
 use cgmath::{Vector3, Point3};
 
 use smallvec::SmallVec;
-use collision::*;
-use geom::*;
+use crate::collision::*;
+use crate::geom::*;
 
 /// A type that supplies constants to a ContactPruner.
 pub trait PruningParams {

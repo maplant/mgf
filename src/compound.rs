@@ -21,10 +21,10 @@ use cgmath::{EuclideanSpace, Rotation, Rotation3, Vector3, Point3, Quaternion, O
 
 use smallvec::SmallVec;
 
-use bvh::*;
-use bounds::*;
-use collision::*;
-use geom::*;
+use crate::bvh::*;
+use crate::bounds::*;
+use crate::collision::*;
+use crate::geom::*;
 
 /// A component is a generic volume that can either be a Sphere or Capsule at
 /// runtime. Anything that can collide with a Sphere and a Capsule can collide
@@ -355,8 +355,8 @@ where
 mod tests {
     mod compound {
         use cgmath::InnerSpace;
-        use compound::*;
-        use collision::Contacts;
+        use crate::compound::*;
+        use crate::collision::Contacts;
 
         #[test]
         fn test_compound() {

@@ -19,8 +19,8 @@ use cgmath::{EuclideanSpace, InnerSpace};
 
 use smallvec::SmallVec;
 
-use manifold::*;
-use physics::*;
+use crate::manifold::*;
+use crate::physics::*;
 
 /// A type that can be indexed and return some information.
 /// Constrained is information that can be returned and set, while Inspected
@@ -29,8 +29,8 @@ pub trait ConstrainedSet<Index, Constrained, Inspected>
 where
     Index: Copy
 {
-    fn get(&self, Index) -> (Constrained, Inspected);
-    fn set(&mut self, Index, Constrained);
+    fn get(&self, _: Index) -> (Constrained, Inspected);
+    fn set(&mut self, _: Index, _: Constrained);
 }
 
 /// A type that represents a constraint between some objects.
@@ -46,7 +46,7 @@ pub trait Constraint {
     type Inspected;
 
     /// Solve the constraint.
-    fn solve<T: ConstrainedSet<Self::Index, Self::Constrained, Self::Inspected>>(&mut self, &mut T);
+    fn solve<T: ConstrainedSet<Self::Index, Self::Constrained, Self::Inspected>>(&mut self, _: &mut T);
 }
 
 /// A generic constraint solver.

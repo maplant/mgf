@@ -18,10 +18,10 @@ use std::ops::Index;
 
 use smallvec::SmallVec;
 
-use bounds::{Bound, BoundedBy};
-use pool::Pool;
+use crate::bounds::{Bound, BoundedBy};
+use crate::pool::Pool;
 
-use collision::{Intersects, Intersection};
+use crate::collision::{Intersects, Intersection};
 
 /// A Bounding Volume Hierarchy.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -506,8 +506,8 @@ where
 mod tests {
     mod bvh {
         use cgmath::{Point3};
-        use geom::{Sphere, AABB};
-        use bvh::BVH;
+        use crate::geom::{Sphere, AABB};
+        use crate::bvh::BVH;
 
         #[test]
         fn test_bvh() {

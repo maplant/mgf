@@ -18,7 +18,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use cgmath::{EuclideanSpace, InnerSpace, Rotation, Point3, Rotation3, Vector3, Quaternion};
 
-use collision;
+use crate::collision;
 
 /// Maximum tolerence for error, i.e. what we consider the x86 floating
 /// point epsilon.
@@ -874,14 +874,14 @@ pub trait Polygon
     const NUM_VERTICES: usize;
 
     /// Returns the ith vertex as a Point.
-    fn vertex(&self, usize) -> Point3<f32>;
+    fn vertex(&self, _: usize) -> Point3<f32>;
 
     /// Returns the ith edge of the polygon as a pair of indices.
     ///
     /// In the future this is hoped to be deprecate in favor of a constant
     /// associated array. Unfortunately it is impossible as of this moment
     /// to have arrays depend on associated constants.
-    fn edge(&self, usize) -> (usize, usize);
+    fn edge(&self, _: usize) -> (usize, usize);
 }
 
 impl Polygon for Triangle {
@@ -1146,7 +1146,7 @@ pub fn compute_basis(n: &Vector3<f32>) -> [Vector3<f32>; 2] {
 mod tests {
     mod triangle {
         use cgmath::{Point3, EuclideanSpace, InnerSpace};
-        use geom::{Triangle, Shape, COLLISION_EPSILON};
+        use crate::geom::{Triangle, Shape, COLLISION_EPSILON};
 
         #[test]
         fn test_tri_closest_pt() {
@@ -1161,7 +1161,7 @@ mod tests {
 
     mod convex {
         use cgmath::{Vector3, Point3};
-        use geom::*;
+        use crate::geom::*;
 
         #[test]
         fn test_capsule_support_fn() {

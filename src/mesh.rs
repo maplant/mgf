@@ -16,10 +16,10 @@
 use std::ops::{AddAssign, SubAssign};
 use std::vec::Vec;
 
-use bvh::*;
-use geom::*;
-use collision::*;
-use bounds::{BoundedBy};
+use crate::bvh::*;
+use crate::geom::*;
+use crate::collision::*;
+use crate::bounds::{BoundedBy};
 use cgmath::prelude::*;
 use cgmath::{Vector3, Point3, Zero, Rotation3};
 

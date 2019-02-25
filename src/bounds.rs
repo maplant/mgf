@@ -17,8 +17,8 @@ use std::ops::{Add, Sub, Mul, Div};
 use std::f32;
 use cgmath::{EuclideanSpace, InnerSpace, Point3, Vector3, Zero};
 
-use geom::*;
-use collision::*;
+use crate::geom::*;
+use crate::collision::*;
 
 /// A type that can overlap, contain, and be combined with one another.
 ///
@@ -39,7 +39,7 @@ pub trait Bound
     + Contains<Self>
 {
     /// Produce a bound that encloses the two arguments.
-    fn combine(&Self, &Self) -> Self;
+    fn combine(_: &Self, _: &Self) -> Self;
 
     /// Return a measure of the area of the object.
     fn surface_area(&self) -> f32;
@@ -322,9 +322,9 @@ impl BoundedBy<Sphere> for OBB {
 mod tests {
     mod bounds {
         use cgmath::{Point3, Vector3};
-        use bounds::Bound;
-        use geom::{Sphere, AABB};
-        use collision::{Contains, Overlaps};
+        use crate::bounds::Bound;
+        use crate::geom::{Sphere, AABB};
+        use crate::collision::{Contains, Overlaps};
 
         #[test]
         fn test_aabb() {
@@ -374,7 +374,7 @@ mod tests {
 
         #[test]
         fn test_mixed() {
-            use bounds::BoundedBy;
+            use crate::bounds::BoundedBy;
 
             let bound1 = Sphere {
                 c: Point3::new(0.0, 0.0, 0.0),

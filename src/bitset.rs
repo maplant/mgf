@@ -74,7 +74,7 @@ mod tests {
     mod bitset {
         #[test]
         fn test_bitset() {
-            use bitset::FixedSizeBitSet;
+            use crate::bitset::FixedSizeBitSet;
 
             let mut bitset: u64 = 0;
 

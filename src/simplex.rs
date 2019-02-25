@@ -20,9 +20,9 @@ use std::collections::HashMap;
 
 use cgmath::prelude::*;
 use cgmath::{EuclideanSpace, InnerSpace, Point3, Vector3};
-use geom::*;
-use collision::*;
-use pool::*;
+use crate::geom::*;
+use crate::collision::*;
+use crate::pool::*;
 
 pub struct Simplex<Point = Point3<f32>>
 where
@@ -201,9 +201,9 @@ trait SimplexState<Point>
 where
     Point: Into<Point3<f32>> + Copy + Clone + 'static
 {
-    fn min_norm(&self, &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>);
+    fn min_norm(&self, _: &mut [Point; 4]) -> (Vector3<f32>, &'static SimplexState<Point>);
 
-    fn add_point(&self, &mut [Point; 4], Point);
+    fn add_point(&self, _: &mut [Point; 4], _: Point);
 
     fn len(&self) -> usize;
 }

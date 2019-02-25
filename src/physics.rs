@@ -18,9 +18,9 @@ use std::slice::Iter;
 use cgmath::{InnerSpace, SquareMatrix, EuclideanSpace, Matrix, Matrix3, Point3,
              Quaternion, Vector3, Zero, One};
 
-use compound::*;
-use geom::*;
-use solver::*;
+use crate::compound::*;
+use crate::geom::*;
+use crate::solver::*;
 
 /// Any type that has a moment of inertia tensor.
 pub trait Inertia {
@@ -320,8 +320,8 @@ mod tests {
         #[test]
         fn test_tensors() {
             use cgmath::{Point3, Matrix3};
-            use geom::Sphere;
-            use physics::Inertia;
+            use crate::geom::Sphere;
+            use crate::physics::Inertia;
 
             let s = Sphere{ c: Point3::new(0.0, 0.0, 0.0), r: 1.0 };
             assert_eq!(

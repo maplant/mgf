@@ -4,9 +4,9 @@ use std::ops::Neg;
 use cgmath::{EuclideanSpace, InnerSpace, Point2, Point3, Quaternion,  Rotation,
              Vector3, Zero};
 
-use bitset::FixedSizeBitSet;
-use geom::*;
-use simplex::*;
+use crate::bitset::FixedSizeBitSet;
+use crate::geom::*;
+use crate::simplex::*;
 
 /// A type that can overlap another.
 ///
@@ -1535,9 +1535,9 @@ where
 mod tests {
     mod intersections {
         use cgmath::{InnerSpace, Point3, Vector3};
-        use geom;
-        use geom::{Capsule, Ray};
-        use collision::{Intersects};
+        use crate::geom;
+        use crate::geom::{Capsule, Ray};
+        use crate::collision::{Intersects};
 
         #[test]
         fn test_ray_intersections() {
@@ -1639,9 +1639,9 @@ mod tests {
 
     mod spheres {
         use cgmath::{Point3, Vector3};
-        use geom;
-        use geom::{Moving, Sphere, Rect, Triangle};
-        use collision::*;
+        use crate::geom;
+        use crate::geom::{Moving, Sphere, Rect, Triangle};
+        use crate::collision::*;
 
         #[test]
         fn test_sphere_penetration() {
@@ -1816,8 +1816,8 @@ mod tests {
 
     mod obbs {
         use cgmath::{Point3, Vector3, Quaternion, One};
-        use geom::OBB;
-        use collision::{Contacts, Contact};
+        use crate::geom::OBB;
+        use crate::collision::{Contacts, Contact};
 
         #[test]
         fn test_obb_collision() {
@@ -1845,9 +1845,9 @@ mod tests {
 
     mod capsules {
         use cgmath::{Point3, Vector3};
-        use geom;
-        use geom::{Capsule, Sphere, Moving, Triangle, Rect};
-        use collision::{Contacts, Contact};
+        use crate::geom;
+        use crate::geom::{Capsule, Sphere, Moving, Triangle, Rect};
+        use crate::collision::{Contacts, Contact};
 
         #[test]
         fn test_moving_sphere_collision() {
