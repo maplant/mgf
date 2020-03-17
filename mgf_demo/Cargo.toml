@@ -4,13 +4,12 @@ version = "0.2.0"
 authors = ["Matthew Plant <maplant95@gmail.com>"]
 
 [dependencies]
-cgmath = "0.15"
 mgf = { path = ".." }
 gfx = "0.16"
 glutin = "0.10"
 gfx_window_glutin = "0.18"
 genmesh = "0.5.0"
-rand = "*"
+rand = "0.7"
 
 [[bin]]
 name = "balls"

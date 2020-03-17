@@ -17,8 +17,8 @@ use cgmath;
 use cgmath::*;
 use mgf::*;
 
-use rand::{SeedableRng, StdRng};
-use rand::distributions::{Range, IndependentSample};
+use rand::{SeedableRng, rngs::StdRng};
+use rand::distributions::{Distribution, Uniform};
 
 use genmesh;
 use genmesh::{Vertices, Triangulate};
@@ -301,9 +301,10 @@ impl<R: Resources> World<R> {
     ) where
         C: CommandBuffer<R>
     {
-        let seed: &[_] = &[1, 2, 3, 4];
+        // "Call me Ishmael. Some years ago—"
+        let seed = [67u8, 97, 108, 108, 32, 109, 101, 32, 73, 115, 104, 109, 97, 101, 108, 46, 32, 83, 111, 109, 101, 32, 121, 101, 97, 114, 115, 32, 97, 103, 111, 45];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
-        let between = Range::new(0f32, 1.0);
+        let between = Uniform::new(0f32, 1.0);
 
         encoder.clear(&color, [1.0, 1.0, 1.0, 1.0]);
         encoder.clear_depth(&depth, 1.0);
@@ -328,9 +329,9 @@ impl<R: Resources> World<R> {
             match collider {
                 Moving(Component::Sphere(s),_) => {
                     let locals = Locals {
-                        color: [ between.ind_sample(&mut rng),
-                                 between.ind_sample(&mut rng),
-                                 between.ind_sample(&mut rng),
+                        color: [ between.sample(&mut rng),
+                                 between.sample(&mut rng),
+                                 between.sample(&mut rng),
                                  1.0 ],
                         model: (Matrix4::from_translation(self.bodies.x[i].to_vec())
                                 * Matrix4::from_scale(s.r)).into(),
@@ -342,9 +343,9 @@ impl<R: Resources> World<R> {
                 },
 
                 Moving(Component::Capsule(c),_) => {
-                    let color = [ between.ind_sample(&mut rng),
-                                  between.ind_sample(&mut rng),
-                                  between.ind_sample(&mut rng),
+                    let color = [ between.sample(&mut rng),
+                                  between.sample(&mut rng),
+                                  between.sample(&mut rng),
                                   1.0 ];
                     let locals = Locals {
                         color,

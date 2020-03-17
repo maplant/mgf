@@ -116,7 +116,7 @@ extern crate smallvec;
 
 #[cfg(feature = "serde")]
 #[macro_use]
-extern crate serde;
+use serde_crate;
 
 mod bvh;
 pub use crate::bvh::*;
