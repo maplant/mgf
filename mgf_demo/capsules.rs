@@ -13,7 +13,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with MGF. If not, see <http://www.gnu.org/licenses/>.
 
-extern crate cgmath;
 extern crate mgf;
 
 extern crate rand;
@@ -25,6 +24,8 @@ extern crate glutin;
 extern crate genmesh;
 
 use std::f32;
+
+use mgf::cgmath;
 
 mod input;
 #[macro_use]
