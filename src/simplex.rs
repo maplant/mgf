@@ -13,6 +13,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with MGF. If not, see <http://www.gnu.org/licenses/>.
 
+// TODO(map): This whole approach needs to be redone. Turns out this half-baked
+// idea of mine is way slower than just using an enum. Go figure.
+
 use std::f32;
 use std::fmt;
 use std::mem;
