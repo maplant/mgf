@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file, following
 the format defined at [keepachangelog.com](http://keepachangelog.com/).
 This project adheres to [Semantic Versioning](http://semver.org/). 
 
+## [v1.3.1] - 2020-04-25
+
+- Fix bug `RigidBodyVec` that incorrectly calculated the inertia tensor.
+
 ## [v1.3.0] - 2019-02-14
 
 - Implemented `Inertia` for `OBB`.

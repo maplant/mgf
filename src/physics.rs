@@ -209,7 +209,7 @@ impl RigidBodyVec {
         self.restitution.push(restitution);
         self.friction.push(friction);
         self.inv_mass.push(1.0 / mass);
-        let inv_moment = collider.tensor(mass).invert().unwrap();
+        let inv_moment = (collider - x.to_vec()).tensor(mass).invert().unwrap();
         self.inv_moment_body.push(inv_moment);
         self.inv_moment.push(inv_moment);
         self.constructor.push(constructor);
