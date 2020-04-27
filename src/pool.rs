@@ -19,8 +19,10 @@ use std::iter::{Enumerate, FilterMap};
 use std::ops::{Index, IndexMut};
 use std::vec::Vec;
 
+use serde::{Serialize, Deserialize};
+
 /// Internal storage type used by Pool.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub enum PoolEntry<T> {
     FreeListEnd,
     FreeListPtr {
@@ -31,7 +33,7 @@ pub enum PoolEntry<T> {
 
 /// Growable array type that allows items to be removed and inserted without
 /// changing the indices of other entries.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Pool<T> {
     len: usize,
     free_list: Option<usize>,

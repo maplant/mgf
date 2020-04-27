@@ -23,14 +23,16 @@ use crate::pool::Pool;
 
 use crate::collision::{Intersects, Intersection};
 
+use serde::{Serialize, Deserialize};
+
 /// A Bounding Volume Hierarchy.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct BVH<B: Bound, V> {
     root: usize,
     pool: Pool<BVHNode<B, V>>,
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 struct BVHNode<B: Bound, V> {
     height: i32,
     parent: usize,
@@ -38,7 +40,7 @@ struct BVHNode<B: Bound, V> {
     node_type: BVHNodeType<V>,
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 enum BVHNodeType<V> {
     Leaf(V),
     Parent(usize, usize),
@@ -108,7 +110,6 @@ impl<B: Bound, V> BVH<B, V> {
         self.root = 0;
         self.pool.clear();
     }
-
 
     fn insert_node(&mut self, bounds: B, node_type: BVHNodeType<V>) -> usize {
         self.pool.push(BVHNode {

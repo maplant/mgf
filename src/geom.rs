@@ -20,13 +20,15 @@ use cgmath::{EuclideanSpace, InnerSpace, Rotation, Point3, Rotation3, Vector3, Q
 
 use crate::collision;
 
+use serde::{Serialize, Deserialize};
+
 /// Maximum tolerence for error, i.e. what we consider the x86 floating
 /// point epsilon.
 pub const COLLISION_EPSILON: f32 = 0.000001;
 
 /// A normal vector and a distance.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Plane {
     /// The normal vector of the plane.
     pub n: Vector3<f32>,
@@ -57,7 +59,7 @@ impl From<(Point3<f32>, Point3<f32>, Point3<f32>)> for Plane {
 
 /// A point and a direction with infinite distance.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Ray {
     /// The origin of the ray.
     pub p: Point3<f32>,
@@ -85,7 +87,7 @@ impl Ray {
 
 /// A point and a direction with a finite distance.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Segment {
     /// The starting point of the segment.
     pub a: Point3<f32>,
@@ -122,7 +124,7 @@ impl From<Segment> for Ray {
 }
 /// Three points in space.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Triangle {
     // TODO: There's no point in making these Vectors. Horribly inconsistent.
     /// The first point in the triangle.
@@ -210,7 +212,7 @@ impl From<(Point3<f32>, Point3<f32>, Point3<f32>, Point3<f32>)> for Tetrahedron 
 
 /// A center point, two directions, and two half widths.
 #[derive(Copy, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Rectangle {
     /// The center of the rectangle.
     pub c: Point3<f32>,
@@ -251,7 +253,7 @@ impl Into<Plane> for Rectangle {
 /// AABBs being closed means that a point lying on the surface of the AABB is
 /// considered contained by the AABB.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct AABB {
     pub c: Point3<f32>,
     pub r: Vector3<f32>,
@@ -266,7 +268,7 @@ impl AABB {
 
 /// An arbitrarily oriented bounding box.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct OBB {
     pub c: Point3<f32>,
     pub q: Quaternion<f32>,
@@ -284,7 +286,7 @@ impl OBB {
 ///
 /// Like AABBs, spheres are closed volumes.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Sphere {
     /// The center point of the sphere.
     pub c: Point3<f32>,
@@ -310,7 +312,7 @@ impl Sphere {
 ///
 /// A capsule can be constructed from a `Moving<Sphere>`
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Capsule {
     /// The starting point of the segment sweeping the sphere
     pub a: Point3<f32>,
@@ -351,7 +353,7 @@ impl From<Moving<Sphere>> for Capsule {
 
 /// A geometry swept accross a given path of motion.
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct Moving<T: Shape>(pub T, pub Vector3<f32>);
 
 impl<T: Copy + Clone + Shape> Moving<T> {
